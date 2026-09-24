@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Пары</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<div id="splash">
+  <div class="sp-icon" id="sp-icon"></div>
+  <div class="sp-name" id="sp-name"></div>
+  <div class="sp-tag" id="sp-tag"></div>
+</div>
+
+<div id="login" hidden></div>
+
+<div id="main" hidden>
+  <header class="top">
+    <div class="top-text">
+      <div class="t-title" id="t-title"></div>
+      <div class="t-sub" id="t-sub"></div>
+    </div>
+    <button class="avatar press" id="avatar" aria-label="Settings"></button>
+  </header>
+
+  <div class="content">
+    <section class="tab" id="tab-schedule">
+      <div class="week">
+        <div class="week-days">
+          <div class="week-pill" id="week-pill"></div>
+          <div class="wd-row" id="wd-row"></div>
+        </div>
+      </div>
+      <div class="pager" id="pager">
+        <div class="ptr" id="ptr-schedule"></div>
+        <div class="track" id="track">
+          <div class="page"></div><div class="page"></div><div class="page"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab" id="tab-tasks">
+      <div class="ptr" id="ptr-tasks"></div>
+      <div class="scroll" id="tasks-scroll"></div>
+    </section>
+
+    <section class="tab" id="tab-grades">
+      <div class="ptr" id="ptr-grades"></div>
+      <div class="scroll" id="grades-scroll"></div>
+    </section>
+  </div>
+
+  <nav class="nav" id="nav">
+    <div class="nav-pill" id="nav-pill"></div>
+    <button data-tab="schedule" class="press"><span id="nav-i-schedule"></span><span data-t="tabSchedule"></span></button>
+    <button data-tab="tasks" class="press"><span id="nav-i-tasks"></span><span data-t="tabTasks"></span><span class="badge" id="task-badge" hidden></span></button>
+    <button data-tab="grades" class="press"><span id="nav-i-grades"></span><span data-t="tabGrades"></span></button>
+  </nav>
+</div>
+
+<div id="sheet-bg"></div>
+<div id="sheet"></div>
+<div id="toast"></div>
+
+<script src="i18n.js"></script>
+<script src="subjects.js"></script>
+<script>if (!window.Android) document.write('<script src="dev-mock.js"><\/script>');</script>
+<script src="app.js"></script>
+</body>
+</html>
