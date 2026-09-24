@@ -968,14 +968,22 @@ const RESOURCES = [
   { url: "https://irc.tsue.uz", ic: "book", t: "resLibrary", s: "resLibrarySub", c: "r-lib" },
   { url: "https://lms.tsue.uz", ic: "cap", t: "resLms", s: "resLmsSub", c: "r-lms" },
   { url: "https://tsue.uz", ic: "globe", t: "resSite", s: "resSiteSub", c: "r-site" },
-  { url: "https://t.me/tsueuzofficial", ic: "send", t: "resTelegram", s: "resTelegramSub", c: "r-tg" },
+  { url: "https://t.me/tsueuzofficial", ic: "send", t: "resTelegram", s: "resTelegramSub", c: "r-tg", ext: true },
 ];
 
 function resCard(r, i) {
-  return `<button class="res ${r.c} anim" style="--i:${i}" data-open="${esc(r.url)}">
+  return `<button class="res ${r.c} anim" style="--i:${i}" data-open="${esc(r.url)}" data-title="${esc(T[r.t])}"${r.ext ? " data-ext=1" : ""}>
     <span class="res-ic">${icon(r.ic)}</span>
     <span class="res-tx"><b>${esc(T[r.t])}</b><small>${esc(T[r.s])}</small></span>
-    <span class="res-go">${icon("external")}</span></button>`;
+    <span class="res-go">${icon(r.ext ? "external" : "arrow")}</span></button>`;
+}
+
+// сайты открываются во встроенном браузере (если приложение поддерживает), иначе - во внешнем
+function openResource(url, title, ext) {
+  if (!ext) {
+    try { if (window.Android && A.openInApp) { A.openInApp(url, title || ""); return; } } catch (e) { }
+  }
+  openExternal(url);
 }
 
 function renderResources() {
@@ -1144,7 +1152,7 @@ function bindEvents() {
 
   $("#resources-scroll").addEventListener("click", e => {
     const b = e.target.closest("[data-open]");
-    if (b) { haptic(); openExternal(b.dataset.open); }
+    if (b) { haptic(); openResource(b.dataset.open, b.dataset.title, b.dataset.ext === "1"); }
   });
 
   attachPull($("#pager"), () => pages()[1], $("#ptr-schedule"), refreshAll, true);
