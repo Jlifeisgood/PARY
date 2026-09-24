@@ -159,6 +159,9 @@ svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width:
 .nav button.on { color: var(--primary-text); }
 .nav button.on svg { transform: translateY(-1px) scale(1.12); }
 .nav-pill { position: absolute; top: 6px; bottom: 8px; left: 10px; width: calc((100% - 20px) / 3); border-radius: 16px; background: var(--primary-soft); transition: transform .45s var(--spring); }
+.nav-4 .nav-pill { width: calc((100% - 20px) / 4); }
+.nav-4 button svg { font-size: 22px; }
+.nav-4 button { font-size: 11.5px; }
 .badge { position: absolute; top: 3px; left: calc(50% + 8px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--red); color: #fff; font-size: 11px; line-height: 18px; animation: pop .4s var(--spring); }
 
 /* полоса дней недели */
@@ -332,6 +335,27 @@ svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width:
 @keyframes barFill { to { transform: scaleX(var(--w, 0)); } }
 .bar b { color: var(--text); font-variant-numeric: tabular-nums; }
 .r5 { --rc: #22c55e; } .r4 { --rc: #3b82f6; } .r3 { --rc: #f59e0b; } .r2 { --rc: #ef4444; } .r0 { --rc: #94a3b8; }
+
+/* ---------------------------------------------------------------- ресурсы */
+.res-list { display: grid; gap: 10px; }
+.res { display: grid; grid-template-columns: 46px 1fr auto; align-items: center; gap: 14px; width: 100%; text-align: left;
+  background: var(--surface); border: 0; border-radius: 18px; padding: 14px 16px; box-shadow: var(--shadow);
+  transition: transform .15s var(--ease); }
+.res:active { transform: scale(.98); }
+.res-ic { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; color: #fff; }
+.res-ic svg { width: 23px; height: 23px; }
+.r-hemis .res-ic { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
+.r-lib .res-ic { background: linear-gradient(135deg, #0ea5e9, #22c1dc); }
+.r-lms .res-ic { background: linear-gradient(135deg, #10b981, #34d399); }
+.r-site .res-ic { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
+.r-tg .res-ic { background: linear-gradient(135deg, #229ed9, #34c3f0); }
+.res-tx { min-width: 0; }
+.res-tx b { display: block; font-size: 15.5px; font-weight: 700; line-height: 1.25; }
+.res-tx small { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.res-go { color: var(--muted); opacity: .6; }
+.res-go svg { width: 18px; height: 18px; }
+.res-hint { display: flex; align-items: center; gap: 8px; justify-content: center; color: var(--muted); font-size: 12.5px; margin: 16px 0 4px; }
+.res-hint svg { width: 15px; height: 15px; }
 
 /* ---------------------------------------------------------------- настройки (нижняя шторка) */
 #sheet-bg { position: fixed; inset: 0; z-index: 40; background: rgba(5, 7, 20, .5); opacity: 0; pointer-events: none; transition: opacity .3s; }
