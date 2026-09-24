@@ -81,6 +81,11 @@ const P = {
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5v.5"/>',
   arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
   party: '<path d="M4 20l4.5-12L16 15.5z"/><path d="M13.5 4.5c.5 1.5 0 3-1.5 4M19.5 10.5c-1.5-.5-3 0-4 1.5M17 3v2M21 7h-2M20.5 14l-1 1"/>',
+  grid: '<rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/>',
+  book: '<path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H19a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5.5A1.5 1.5 0 0 0 4 20.5z"/><path d="M4 20.5A1.5 1.5 0 0 1 5.5 19H20"/>',
+  cap: '<path d="M12 4 2 9l10 5 10-5-10-5z"/><path d="M6 11.5V16c0 1.1 2.7 3 6 3s6-1.9 6-3v-4.5"/>',
+  send: '<path d="M22 3 11 14"/><path d="M22 3 15 21l-4-7-7-4z"/>',
+  external: '<path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/>',
 };
 const icon = name => `<svg class="i" viewBox="0 0 24 24">${P[name]}</svg>`;
 
@@ -282,6 +287,7 @@ function showMain() {
   $("#nav-i-schedule").innerHTML = icon("calendar");
   $("#nav-i-tasks").innerHTML = icon("tasks");
   $("#nav-i-grades").innerHTML = icon("grades");
+  $("#nav-i-resources").innerHTML = icon("grid");
   setLang(L, false);
   renderAvatar();
   setTab("schedule", true);
@@ -331,6 +337,9 @@ function renderHeader(anim, date) {
     title = T.tabTasks;
     const active = (S.tasks && S.tasks.items || []).filter(t => taskState(t) !== "done").length;
     sub = S.tasks ? `${T.tasksActive}: ${active}` : T.loading;
+  } else if (S.tab === "resources") {
+    title = T.tabResources;
+    sub = "TDIU · TSUE";
   } else {
     title = T.tabGrades;
     const sem = S.grades && (S.grades.semesters || []).find(s => s.code === S.grades.semester);
@@ -350,12 +359,13 @@ function setTab(tab, silent) {
   }
   S.tab = tab;
   $$(".tab").forEach(el => el.classList.toggle("active", el.id === "tab-" + tab));
-  const idx = ["schedule", "tasks", "grades"].indexOf(tab);
+  const idx = ["schedule", "tasks", "grades", "resources"].indexOf(tab);
   $$("#nav button").forEach((b, i) => b.classList.toggle("on", i === idx));
   $("#nav-pill").style.transform = `translateX(${idx * 100}%)`;
   if (!silent) haptic();
   if (tab === "tasks") { renderTasks(true); loadTasks(false); }
   if (tab === "grades") { renderGrades(true); loadGrades(false); }
+  if (tab === "resources") renderResources();
   renderHeader(true);
 }
 
@@ -951,6 +961,35 @@ function countUp(root) {
   });
 }
 
+// ------------------------------------------------------------------ ресурсы
+
+const RESOURCES = [
+  { url: "https://talaba.tsue.uz", ic: "user", t: "resHemis", s: "resHemisSub", c: "r-hemis" },
+  { url: "https://irc.tsue.uz", ic: "book", t: "resLibrary", s: "resLibrarySub", c: "r-lib" },
+  { url: "https://lms.tsue.uz", ic: "cap", t: "resLms", s: "resLmsSub", c: "r-lms" },
+  { url: "https://tsue.uz", ic: "globe", t: "resSite", s: "resSiteSub", c: "r-site" },
+  { url: "https://t.me/tsueuzofficial", ic: "send", t: "resTelegram", s: "resTelegramSub", c: "r-tg" },
+];
+
+function resCard(r, i) {
+  return `<button class="res ${r.c} anim" style="--i:${i}" data-open="${esc(r.url)}">
+    <span class="res-ic">${icon(r.ic)}</span>
+    <span class="res-tx"><b>${esc(T[r.t])}</b><small>${esc(T[r.s])}</small></span>
+    <span class="res-go">${icon("external")}</span></button>`;
+}
+
+function renderResources() {
+  const box = $("#resources-scroll");
+  box.innerHTML =
+    `<div class="section" style="margin-top:4px">${esc(T.resServices)}</div>` +
+    `<div class="res-list">${RESOURCES.map((r, i) => resCard(r, i)).join("")}</div>` +
+    `<div class="res-hint">${icon("info")}<span>${esc(T.openInBrowser)}</span></div>`;
+}
+
+function openExternal(url) {
+  try { if (window.Android && A.openUrl) A.openUrl(url); else window.open(url, "_blank"); } catch (e) { }
+}
+
 // ------------------------------------------------------------------ настройки
 
 function openSheet(html) {
@@ -1101,6 +1140,11 @@ function bindEvents() {
     const s = e.target.closest("[data-sem]");
     if (s && (!S.grades || s.dataset.sem !== S.grades.semester)) { S.gradesSem = s.dataset.sem; haptic(); loadGrades(false, s.dataset.sem); return; }
     if (e.target.closest("[data-retry]")) loadGrades(true);
+  });
+
+  $("#resources-scroll").addEventListener("click", e => {
+    const b = e.target.closest("[data-open]");
+    if (b) { haptic(); openExternal(b.dataset.open); }
   });
 
   attachPull($("#pager"), () => pages()[1], $("#ptr-schedule"), refreshAll, true);
