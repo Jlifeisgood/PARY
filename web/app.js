@@ -8,6 +8,7 @@ const MS_DAY = 864e5;
 const TZ_OFFSET = 5 * 3600e3;   // Ташкент, UTC+5 без перехода на летнее время
 
 let L = "uz", T = I18N.uz;
+let theme = "auto";   // auto | light | dark
 const S = {
   state: null, me: null, tab: "schedule", sel: null,
   weeks: {}, pending: {},
@@ -153,7 +154,17 @@ function setLang(lang, save) {
   $$("[data-t]").forEach(el => { el.textContent = T[el.dataset.t]; });
 }
 
-const isDark = () => window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches;
+const sysDark = () => window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches;
+const isDark = () => theme === "dark" || (theme === "auto" && sysDark());
+
+function applyTheme(save) {
+  const el = document.documentElement;
+  if (theme === "auto") el.removeAttribute("data-theme");
+  else el.setAttribute("data-theme", theme);
+  if (save) store.set("theme", theme);
+  if (!$("#main").hidden || !$("#login").hidden) applyBars(false);
+}
+
 function applyBars(splash) {
   if (!A) return;
   const bg = splash ? "#1E1B4B" : getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
@@ -1009,6 +1020,7 @@ function setSheet(html) {
   $("#sheet").innerHTML = `<div class="grab"></div>` + html;
   setAvatar($("#set-avatar"));
   placeSeg($("#set-lang"));
+  placeSeg($("#set-theme"));
 }
 function closeSheet() { document.body.classList.remove("sheet-open"); }
 const sheetOpen = () => document.body.classList.contains("sheet-open");
@@ -1026,6 +1038,7 @@ function settingsHtml() {
       <b>${esc(me.fullName || [me.lastName, me.firstName].filter(Boolean).join(" "))}</b>
       ${sub ? `<small>${esc(sub)}</small>` : ""}${me.group ? `<span class="gchip">${esc(me.group)}</span>` : ""}</div></div>
     <div class="sec"><h4>${icon("globe")}${esc(T.language)}</h4>${segHtml("set-lang", LANGS, L).replace('class="seg"', 'class="seg wide"')}</div>
+    <div class="sec"><h4>${icon(isDark() ? "moon" : "sun")}${esc(T.theme)}</h4>${segHtml("set-theme", [["auto", T.themeAuto], ["light", T.themeLight], ["dark", T.themeDark]], theme).replace('class="seg"', 'class="seg wide"')}</div>
     <div class="sec"><h4>${icon("bell")}${esc(T.reminders)}</h4><div class="toggles">${toggles}</div><p>${esc(T.remindersHint)}</p>${warn}</div>
     <div class="actions">
       <button class="btn ghost" data-act="refresh">${icon("refresh")}${esc(T.refresh)}</button>
@@ -1054,6 +1067,14 @@ function onSheetClick(e) {
     loadTasks(false, S.tab !== "tasks");
     if (S.tab === "grades") loadGrades(false);
     syncReminders();
+    return;
+  }
+  const themeBtn = e.target.closest("#set-theme button[data-v]");
+  if (themeBtn && themeBtn.dataset.v !== theme) {
+    theme = themeBtn.dataset.v;
+    applyTheme(true);
+    haptic();
+    setSheet(settingsHtml());
     return;
   }
   const rem = e.target.closest("[data-rem]");
@@ -1198,6 +1219,8 @@ window.onNotifPermission = granted => {
 // ------------------------------------------------------------------ запуск
 
 async function boot() {
+  theme = store.get("theme") || "auto";
+  applyTheme(false);
   setLang(detectLang(), false);
   startSplash();
   const minSplash = sleep(SPLASH_MS);
