@@ -188,7 +188,7 @@ const LANGS_SHORT = [["uz", "UZ"], ["ru", "RU"], ["en", "EN"]];
 // ------------------------------------------------------------------ заставка
 
 const APP_NAME = "Пары";
-const FLIP_STEP = 0.32, FLIP_DUR = 0.95;
+const FLIP_STEP = 0.3, FLIP_DUR = 1.15;
 function startSplash() {
   // календарь, у которого страницы перелистываются к сегодняшнему дню
   const now = nowT(), mon = T.months[now.getUTCMonth()].slice(0, 3).toUpperCase();

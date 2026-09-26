@@ -73,8 +73,8 @@ svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width:
 .cal-sheet .bd span { font-size: 13px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .08em; }
 .cal-sheet .bd b { font-size: 50px; font-weight: 800; line-height: 1; color: #1b1f27; letter-spacing: -.02em; }
 .cal-sheet.final .bd b { color: #6d28d9; }
-/* плавный диагональный отрыв: лист медленно отгибается слева направо и открывает следующий */
-.cal-sheet.flip { animation: sheetTear var(--fd, .95s) cubic-bezier(.45, .05, .55, .95) forwards; animation-delay: var(--d); transform-origin: 100% 40%; }
+/* лист лежит на календаре почти всё время, а в конце плавно отрывается у СВ-угла (правый верхний) */
+.cal-sheet.flip { animation: sheetTear var(--fd, 1.15s) linear forwards; animation-delay: var(--d); transform-origin: 100% 0%; }
 .sp-name { position: relative; margin-top: 28px; font-size: 42px; font-weight: 800; letter-spacing: -.02em; display: flex; }
 .sp-name span { display: inline-block; transform: translateY(28px); opacity: 0; animation: letterIn .5s var(--spring) both; }
 .sp-tag { position: relative; margin-top: 8px; font-size: 15px; color: rgba(255, 255, 255, .72); transform: translateY(10px); opacity: 0; animation: fadeUp .55s var(--ease) both; }
@@ -83,9 +83,10 @@ svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width:
 @keyframes calIn { 0% { transform: scale(.5) translateY(14px); opacity: 0; } 100% { transform: none; opacity: 1; } }
 @keyframes sheetFlip { to { transform: rotateX(-164deg); } }
 @keyframes sheetTear {
-  0% { transform: rotate3d(.32, 1, 0, 0deg); opacity: 1; }
-  75% { opacity: 1; }
-  100% { transform: rotate3d(.32, 1, 0, 104deg); opacity: 0; }
+  0% { transform: rotate3d(-1, -1, 0, 0deg); opacity: 1; animation-timing-function: cubic-bezier(.5, 0, .85, .3); }   /* лист лежит на календаре */
+  45% { transform: rotate3d(-1, -1, 0, 4deg); opacity: 1; animation-timing-function: cubic-bezier(.32, .12, .5, 1); } /* плавно, видимо отрывается */
+  92% { opacity: 1; }
+  100% { transform: rotate3d(-1, -1, 0, 104deg); opacity: 0; }
 }
 @keyframes letterIn { to { transform: translateY(0); opacity: 1; } }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
