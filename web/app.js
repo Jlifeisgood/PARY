@@ -13,7 +13,7 @@ const S = {
   state: null, me: null, tab: "schedule", sel: null,
   weeks: {}, pending: {},
   tasks: null, taskFilter: "active", openTask: null,
-  grades: null, gradesSem: null,
+  grades: null, gradesSem: null, exams: null,
   reminders: [10], animating: false, lastToast: 0,
 };
 
@@ -386,7 +386,7 @@ function setTab(tab, silent) {
   $("#nav-pill").style.transform = `translateX(${idx * 100}%)`;
   if (!silent) haptic();
   if (tab === "tasks") { renderTasks(true); loadTasks(false); }
-  if (tab === "grades") { renderGrades(true); loadGrades(false); }
+  if (tab === "grades") { renderGrades(true); loadGrades(false); loadExams(false); }
   if (tab === "resources") renderResources();
   renderHeader(true);
 }
@@ -915,6 +915,53 @@ async function loadGrades(force, sem) {
   if (S.tab === "grades") renderHeader(false);
 }
 
+async function loadExams(force) {
+  if (!S.exams) S.exams = store.get("exams:" + L);
+  const r = await api(`exams${force ? "?refresh=1" : ""}`);
+  if (r.ok) {
+    const changed = JSON.stringify(r.items) !== JSON.stringify(S.exams && S.exams.items);
+    S.exams = r;
+    store.set("exams:" + L, r);
+    if (S.tab === "grades" && changed) renderGrades(true);
+  }
+  // при ошибке (старый шелл без /api/exams или сессии нет) — раздел просто скрыт
+}
+
+function examsHtml() {
+  const ex = S.exams && S.exams.items;
+  if (!ex || !ex.length) return "";
+  const now = Date.now();
+  // предстоящие сверху (ближайший первым), прошедшие — внизу
+  const items = [...ex].sort((a, b) => {
+    const fa = (a.date || 0) * 1000 >= now, fb = (b.date || 0) * 1000 >= now;
+    if (fa !== fb) return fa ? -1 : 1;
+    return fa ? (a.date - b.date) : (b.date - a.date);
+  });
+  const cards = items.map((e, i) => {
+    const d = fromEpoch(e.date);
+    const ms = e.date * 1000;
+    const passed = ms < now - 6 * 3600e3;
+    const daysLeft = Math.ceil((dayStart(new Date(ms + TZ_OFFSET)) - today()) / MS_DAY);
+    let badge;
+    if (passed) badge = `<span class="pill">${esc(T.examPassed)}</span>`;
+    else if (daysLeft <= 0) badge = `<span class="pill red">${esc(T.today)}</span>`;
+    else if (daysLeft === 1) badge = `<span class="pill amber">${esc(T.tomorrow)}</span>`;
+    else badge = `<span class="pill ${daysLeft <= 5 ? "amber" : "blue"}">${esc(T.examSoon(daysLeft))}</span>`;
+    const room = [e.room, e.building].filter(Boolean).join(", ");
+    const meta = [
+      e.type && esc(e.type),
+      room && `${icon("pin")}${esc(room)}`,
+      e.teacher && `${icon("user")}${esc(e.teacher)}`,
+    ].filter(Boolean).join(" · ");
+    const time = e.start ? `, ${esc(e.start)}${e.end ? "–" + esc(e.end) : ""}` : "";
+    return `<div class="exam${passed ? " past" : ""} anim" style="--i:${i}">
+      <div class="ex-date"><b>${d.getUTCDate()}</b><span>${esc(T.months[d.getUTCMonth()].slice(0, 3))}</span></div>
+      <div class="ex-body"><div class="ex-top"><b>${esc(translateSubject(e.subject, L))}</b>${badge}</div>
+        <div class="ex-meta">${esc(T.days[dow(d)])}${time}${meta ? " · " + meta : ""}</div></div></div>`;
+  }).join("");
+  return `<div class="section" style="margin-top:2px">${esc(T.examsTitle)}</div><div class="ex-list">${cards}</div>`;
+}
+
 const num = v => { const n = parseFloat(String(v).replace(",", ".")); return isFinite(n) ? n : null; };
 function percentOf(o) {
   if (!o) return null;
@@ -963,7 +1010,7 @@ function renderGrades(anim) {
 
   const list = subjects.length ? subjects.map((s, i) => gradeHtml(s, i)).join("")
     : `<div class="empty anim"><div class="em-ico">${icon("grades")}</div><h3>${esc(T.noGrades)}</h3></div>`;
-  box.innerHTML = (g.stale ? `<div class="note">${icon("info")}<span>${esc(T.staleData)}</span></div>` : "") + hero + chips + list;
+  box.innerHTML = (g.stale ? `<div class="note">${icon("info")}<span>${esc(T.staleData)}</span></div>` : "") + examsHtml() + hero + chips + list;
   if (!anim) box.querySelectorAll(".anim").forEach(el => el.classList.remove("anim"));
   countUp(box);
   const on = box.querySelector(".chips .fchip.on");
@@ -1068,7 +1115,7 @@ function onSheetClick(e) {
   if (langBtn && langBtn.dataset.v !== L) {
     setLang(langBtn.dataset.v, true);
     S.me = store.get("me:" + L) || S.me;
-    S.tasks = null; S.grades = null;
+    S.tasks = null; S.grades = null; S.exams = null;
     setSheet(settingsHtml());
     renderPager(false);
     renderHeader(true);
@@ -1113,7 +1160,7 @@ function onSheetClick(e) {
     case "logout-yes":
       try { A && A.logout(); } catch (err) { }
       store.clear();
-      S.me = null; S.weeks = {}; S.tasks = null; S.grades = null;
+      S.me = null; S.weeks = {}; S.tasks = null; S.grades = null; S.exams = null; S.exams = null;
       closeSheet();
       showLogin();
       break;

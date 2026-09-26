@@ -385,6 +385,19 @@ svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width:
 .res-hint { display: flex; align-items: center; gap: 8px; justify-content: center; color: var(--muted); font-size: 12.5px; margin: 16px 0 4px; }
 .res-hint svg { width: 15px; height: 15px; }
 
+/* ---------------------------------------------------------------- экзамены (сессия) */
+.ex-list { display: grid; gap: 10px; margin-bottom: 14px; }
+.exam { display: grid; grid-template-columns: 50px 1fr; gap: 13px; align-items: center; background: var(--surface); border-radius: 18px; padding: 12px 14px; box-shadow: var(--shadow); }
+.exam.past { opacity: .55; box-shadow: none; }
+.ex-date { text-align: center; background: linear-gradient(135deg, var(--primary), var(--primary2)); color: #fff; border-radius: 13px; padding: 7px 0; }
+.ex-date b { display: block; font-size: 20px; font-weight: 800; line-height: 1; }
+.ex-date span { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; opacity: .9; }
+.exam.past .ex-date { background: var(--surface2); color: var(--muted); }
+.ex-top { display: flex; align-items: center; gap: 8px; }
+.ex-top b { font-size: 15px; font-weight: 700; line-height: 1.25; flex: 1; min-width: 0; }
+.ex-meta { color: var(--muted); font-size: 13px; margin-top: 3px; line-height: 1.4; }
+.ex-meta svg { width: 14px; height: 14px; vertical-align: -2px; }
+
 /* ---------------------------------------------------------------- настройки (нижняя шторка) */
 #sheet-bg { position: fixed; inset: 0; z-index: 40; background: rgba(5, 7, 20, .5); opacity: 0; pointer-events: none; transition: opacity .3s; }
 #sheet {
