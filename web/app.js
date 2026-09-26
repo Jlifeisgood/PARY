@@ -188,18 +188,29 @@ const LANGS_SHORT = [["uz", "UZ"], ["ru", "RU"], ["en", "EN"]];
 // ------------------------------------------------------------------ заставка
 
 const APP_NAME = "Пары";
-const FLIP_STEP = 0.3, FLIP_DUR = 1.15;
+const FLIP_STEP = 0.3, FLIP_DUR = 1.15, CURL_SEGS = 11;
 function startSplash() {
-  // календарь, у которого страницы перелистываются к сегодняшнему дню
+  // календарь, у которого страницы отрываются к сегодняшнему дню
   const now = nowT(), mon = T.months[now.getUTCMonth()].slice(0, 3).toUpperCase();
+  const face = d => `<div class="hd">${esc(mon)}</div><div class="bd"><span>${esc(T.daysShort[dow(d)])}</span><b>${d.getUTCDate()}</b></div>`;
+  // отрывающийся лист = вложенные полоски (.seg), каждая гнётся чуть сильнее — получается изгиб бумаги
+  const curl = d => {
+    let html = "";
+    for (let s = CURL_SEGS - 1; s >= 0; s--) html = `<div class="seg" style="--i:${s}"><div class="face">${face(d)}</div>${html}</div>`;
+    return html;
+  };
   let sheets = "";
   for (let i = 0; i < 4; i++) {
     const d = addDays(dayStart(now), i - 3), final = i === 3;
-    sheets += `<div class="cal-sheet${final ? " final" : " flip"}" style="z-index:${4 - i};--d:${(i * FLIP_STEP).toFixed(2)}s">
-      <div class="hd">${esc(mon)}</div>
-      <div class="bd"><span>${esc(T.daysShort[dow(d)])}</span><b>${d.getUTCDate()}</b></div></div>`;
+    sheets += final
+      ? `<div class="cal-sheet final" style="z-index:1">${face(d)}</div>`
+      : `<div class="cal-sheet flip" style="z-index:${4 - i};--d:${(i * FLIP_STEP).toFixed(2)}s;--sn:${CURL_SEGS}">${curl(d)}</div>`;
   }
   $("#sp-icon").innerHTML = `<div class="cal"><div class="cal-hang"><i></i><i></i></div><div class="cal-stack">${sheets}</div></div>`;
+  // размеры полосок в px (нужны для клипа), от реальной высоты листа
+  const stack = $("#sp-icon .cal-stack");
+  const h = stack ? stack.clientHeight : 117;
+  $$("#sp-icon .cal-sheet.flip").forEach(el => { el.style.setProperty("--sheeth", h + "px"); el.style.setProperty("--segh", (h / CURL_SEGS) + "px"); });
 
   const nameAt = 3 * FLIP_STEP + FLIP_DUR - 0.15;   // имя проявляется, когда долистали до сегодня
   $("#sp-name").innerHTML = [...APP_NAME].map((c, i) => `<span style="animation-delay:${(nameAt + i * 0.09).toFixed(2)}s">${esc(c)}</span>`).join("");

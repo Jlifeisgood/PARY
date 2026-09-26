@@ -73,8 +73,16 @@ svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width:
 .cal-sheet .bd span { font-size: 13px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .08em; }
 .cal-sheet .bd b { font-size: 50px; font-weight: 800; line-height: 1; color: #1b1f27; letter-spacing: -.02em; }
 .cal-sheet.final .bd b { color: #6d28d9; }
-/* лист лежит на календаре почти всё время, а в конце плавно отрывается у СВ-угла (правый верхний) */
-.cal-sheet.flip { animation: sheetTear var(--fd, 1.15s) linear forwards; animation-delay: var(--d); transform-origin: 100% 0%; }
+/* гибкий отрыв: лист собран из полосок (.seg), которые сгибаются как бумага, и всплывает, растворяясь */
+.cal-sheet.flip { background: transparent; box-shadow: none; overflow: visible; transform-style: preserve-3d;
+  transform-origin: top center; animation: curlAway var(--fd, 1.15s) linear forwards; animation-delay: var(--d); }
+.cal-sheet.flip .seg { position: absolute; left: 0; top: 0; width: 100%; height: var(--segh); transform-origin: top center;
+  transform-style: preserve-3d; overflow: hidden; animation: segCurl var(--fd, 1.15s) linear forwards;
+  animation-delay: calc(var(--d) + (var(--sn) - var(--i)) * .035s); }
+.cal-sheet.flip > .seg { top: 0; }
+.cal-sheet.flip .seg > .seg { top: 100%; }
+.cal-sheet.flip .seg > .face { position: absolute; left: 0; width: 100%; height: var(--sheeth); top: calc(-1 * var(--i) * var(--segh));
+  border-radius: 24px; overflow: hidden; background: #fff; display: flex; flex-direction: column; }
 .sp-name { position: relative; margin-top: 28px; font-size: 42px; font-weight: 800; letter-spacing: -.02em; display: flex; }
 .sp-name span { display: inline-block; transform: translateY(28px); opacity: 0; animation: letterIn .5s var(--spring) both; }
 .sp-tag { position: relative; margin-top: 8px; font-size: 15px; color: rgba(255, 255, 255, .72); transform: translateY(10px); opacity: 0; animation: fadeUp .55s var(--ease) both; }
@@ -82,11 +90,15 @@ svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width:
 @keyframes glow { from { transform: scale(.3); opacity: 0; } }
 @keyframes calIn { 0% { transform: scale(.5) translateY(14px); opacity: 0; } 100% { transform: none; opacity: 1; } }
 @keyframes sheetFlip { to { transform: rotateX(-164deg); } }
-@keyframes sheetTear {
-  0% { transform: rotate3d(-1, -1, 0, 0deg); opacity: 1; animation-timing-function: cubic-bezier(.5, 0, .85, .3); }   /* лист лежит на календаре */
-  45% { transform: rotate3d(-1, -1, 0, 4deg); opacity: 1; animation-timing-function: cubic-bezier(.32, .12, .5, 1); } /* плавно, видимо отрывается */
-  92% { opacity: 1; }
-  100% { transform: rotate3d(-1, -1, 0, 104deg); opacity: 0; }
+@keyframes curlAway {
+  0% { transform: translate(0, 0) rotate(0deg); opacity: 1; animation-timing-function: cubic-bezier(.5, 0, .85, .35); }
+  40% { transform: translate(0, 0) rotate(0deg); opacity: 1; animation-timing-function: cubic-bezier(.35, .1, .5, 1); }
+  100% { transform: translate(9%, -46%) rotate(7deg); opacity: 0; }
+}
+@keyframes segCurl {
+  0% { transform: rotateX(0deg); animation-timing-function: cubic-bezier(.5, 0, .85, .35); }
+  38% { transform: rotateX(0deg); animation-timing-function: cubic-bezier(.35, .1, .5, 1); }
+  100% { transform: rotateX(var(--a, 6deg)); }
 }
 @keyframes letterIn { to { transform: translateY(0); opacity: 1; } }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
