@@ -280,6 +280,14 @@ svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width:
 
 .break { display: flex; align-items: center; gap: 10px; margin: 2px 8px 12px; color: var(--muted); font-size: 12.5px; font-weight: 600; }
 .break::before, .break::after { content: ""; flex: 1; border-top: 1.5px dashed var(--line); }
+.exam-banner { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; border: 0; border-radius: 18px;
+  padding: 13px 15px; margin-bottom: 12px; background: linear-gradient(135deg, var(--primary), var(--primary2)); color: #fff;
+  box-shadow: 0 12px 26px -14px var(--primary); animation: fadeUp .4s var(--ease); }
+.exam-banner svg { width: 22px; height: 22px; flex: none; }
+.exam-banner span { flex: 1; min-width: 0; }
+.exam-banner b { display: block; font-size: 14.5px; font-weight: 800; }
+.exam-banner small { display: block; opacity: .9; font-size: 13px; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.exam-banner .res-go, .exam-banner > svg:last-child { opacity: .85; }
 .note { display: flex; gap: 10px; align-items: flex-start; padding: 11px 14px; margin-bottom: 12px; border-radius: 16px; font-size: 13px; font-weight: 600; background: var(--amber-soft); color: var(--amber-text); animation: fadeUp .4s var(--ease); }
 .note svg { font-size: 17px; margin-top: 1px; }
 .note.ok { background: var(--green-soft); color: var(--green-text); }

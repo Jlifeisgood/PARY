@@ -319,6 +319,7 @@ function showMain() {
   syncSoon();
   loadMe(true);
   loadTasks(false, true);
+  loadExams(false);
   if (S.reminders.length) { try { A && A.askNotificationsOnce(); } catch (e) { } }
 }
 
@@ -554,11 +555,25 @@ function errorHtml(r) {
     <button class="em-next press" data-retry="1">${icon("refresh")}${esc(T.retry)}</button></div>`;
 }
 
+// ближайший непройденный экзамен в пределах 3 дней — показывается на «Сегодня»
+function examBanner(date) {
+  const items = S.exams && S.exams.items;
+  if (!items || !items.length || iso(date) !== iso(today())) return "";
+  const now = Date.now();
+  const soon = items.filter(e => e.date * 1000 > now - 3600e3 && e.date * 1000 - now < 3 * MS_DAY).sort((a, b) => a.date - b.date)[0];
+  if (!soon) return "";
+  const d = fromEpoch(soon.date), days = Math.ceil((dayStart(new Date(soon.date * 1000 + TZ_OFFSET)) - today()) / MS_DAY);
+  const when = days <= 0 ? T.today : days === 1 ? T.tomorrow : T.examSoon(days);
+  return `<button class="exam-banner press" data-go-exams="1">${icon("cap")}
+    <span><b>${esc(when)}${soon.start ? ", " + esc(soon.start) : ""}</b><small>${esc(translateSubject(soon.subject, L))}</small></span>
+    ${icon("arrow")}</button>`;
+}
+
 function pageHtml(date, anim) {
   const w = getWeek(mondayOf(date));
   if (!w) return skeletonHtml();
   if (!w.lessons) return errorHtml(w.error);
-  let html = "";
+  let html = examBanner(date);
   if (w.note === "group_not_found") html += `<div class="note">${icon("info")}<span>${esc(T.groupNotFound)}</span></div>`;
   else if (w.outdated) html += `<div class="note">${icon("info")}<span>${esc(T.outdated)}</span></div>`;
   const list = lessonsOn(date);
@@ -922,7 +937,9 @@ async function loadExams(force) {
     const changed = JSON.stringify(r.items) !== JSON.stringify(S.exams && S.exams.items);
     S.exams = r;
     store.set("exams:" + L, r);
-    if (S.tab === "grades" && changed) renderGrades(true);
+    if (!changed) return;
+    if (S.tab === "grades") renderGrades(true);
+    else if (S.tab === "schedule" && !S.animating) renderPager(false, true);   // подхватить баннер экзамена
   }
   // при ошибке (старый шелл без /api/exams или сессии нет) — раздел просто скрыт
 }
@@ -1040,11 +1057,12 @@ const RESOURCES = [
   { url: "https://t.me/tsueuzofficial", ic: "send", t: "resTelegram", s: "resTelegramSub", c: "r-tg", ext: true },
 ];
 
-function resCard(r, i) {
+function resCard(r, i, inApp) {
+  const external = r.ext || !inApp;   // без нативной поддержки (старая версия приложения) - всегда во внешнем браузере
   return `<button class="res ${r.c} anim" style="--i:${i}" data-open="${esc(r.url)}" data-title="${esc(T[r.t])}"${r.ext ? " data-ext=1" : ""}>
     <span class="res-ic">${icon(r.ic)}</span>
     <span class="res-tx"><b>${esc(T[r.t])}</b><small>${esc(T[r.s])}</small></span>
-    <span class="res-go">${icon(r.ext ? "external" : "arrow")}</span></button>`;
+    <span class="res-go">${icon(external ? "external" : "arrow")}</span></button>`;
 }
 
 // сайты открываются во встроенном браузере (если приложение поддерживает), иначе - во внешнем
@@ -1055,12 +1073,15 @@ function openResource(url, title, ext) {
   openExternal(url);
 }
 
+const canOpenInApp = () => { try { return !!(window.Android && A.openInApp); } catch (e) { return false; } };
+
 function renderResources() {
   const box = $("#resources-scroll");
+  const inApp = canOpenInApp();
   box.innerHTML =
     `<div class="section" style="margin-top:4px">${esc(T.resServices)}</div>` +
-    `<div class="res-list">${RESOURCES.map((r, i) => resCard(r, i)).join("")}</div>` +
-    `<div class="res-hint">${icon("info")}<span>${esc(T.openInBrowser)}</span></div>`;
+    `<div class="res-list">${RESOURCES.map((r, i) => resCard(r, i, inApp)).join("")}</div>` +
+    `<div class="res-hint">${icon("info")}<span>${esc(inApp ? T.openInBrowser : T.updateForInApp)}</span></div>`;
 }
 
 function openExternal(url) {
@@ -1205,6 +1226,7 @@ function bindEvents() {
   $("#track").addEventListener("click", e => {
     const go = e.target.closest("[data-go]");
     if (go) return goToDate(parseIso(go.dataset.go));
+    if (e.target.closest("[data-go-exams]")) { haptic(); setTab("grades"); return; }
     if (e.target.closest("[data-retry]")) { ensureWeek(mondayOf(S.sel), true); renderPager(false); }
   });
 
