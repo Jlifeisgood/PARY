@@ -375,21 +375,33 @@ function renderHeader(anim, date) {
   if (anim) { t.classList.remove("t-anim"); void t.offsetWidth; t.classList.add("t-anim"); }
 }
 
+// следующий кадр, но с подстраховкой таймером: если кадры не рисуются (экран неактивен), действие всё равно выполнится
+function nextFrame(fn) {
+  let done = false;
+  const run = () => { if (!done) { done = true; fn(); } };
+  requestAnimationFrame(run);
+  setTimeout(run, 60);
+}
+
 function setTab(tab, silent) {
   if (!silent && tab === S.tab) {
     if (tab === "schedule" && iso(S.sel) !== iso(today())) goToDate(today());
     return;
   }
   S.tab = tab;
-  $$(".tab").forEach(el => el.classList.toggle("active", el.id === "tab-" + tab));
   const idx = ["schedule", "tasks", "grades", "resources"].indexOf(tab);
   $$("#nav button").forEach((b, i) => b.classList.toggle("on", i === idx));
   $("#nav-pill").style.transform = `translateX(${idx * 100}%)`;
   if (!silent) haptic();
-  if (tab === "tasks") { renderTasks(true); loadTasks(false); }
-  if (tab === "grades") { renderGrades(true); loadGrades(false); loadExams(false); }
+  // сначала собираем содержимое, а появление вкладки запускаем со следующего кадра:
+  // тяжёлая перерисовка списка больше не «съедает» первые кадры перехода
+  if (tab === "tasks") renderTasks(true);
+  if (tab === "grades") renderGrades(true);
   if (tab === "resources") renderResources();
   renderHeader(true);
+  nextFrame(() => $$(".tab").forEach(el => el.classList.toggle("active", el.id === "tab-" + S.tab)));
+  if (tab === "tasks") loadTasks(false);
+  if (tab === "grades") { loadGrades(false); loadExams(false); }
 }
 
 // ------------------------------------------------------------------ расписание: данные
@@ -660,7 +672,30 @@ function moveStripTo(date) {
   return true;
 }
 
-function slide(dir) {
+// длительность доводки листа: чем меньше осталось пройти и чем быстрее бросок — тем короче,
+// чтобы движение продолжало палец, а не «перезапускалось» с фиксированной скоростью
+function settleMs(left, w, v) {
+  let ms = 320 * Math.max(0.15, left / Math.max(1, w));
+  const speed = Math.abs(v || 0);   // px/мс в момент отпускания
+  if (speed > 0.3) ms = Math.min(ms, left / speed * 1.8);
+  return Math.round(Math.max(140, Math.min(320, ms)));
+}
+
+// задаёт доводку листа: длительность + кривая, у которой начальная скорость равна скорости пальца
+// (стандартный ease-out стартует в ~3.6 раза быстрее средней — лист «рвался» вперёд пальца)
+function setSettle(track, left, w, v) {
+  const ms = settleMs(left, w, v);
+  let ease = "cubic-bezier(.22, .8, .24, 1)";
+  if (v !== null) {
+    const slope = Math.max(1, Math.min(3.6, Math.abs(v) * ms / Math.max(1, left)));   // начальная скорость / средняя
+    ease = `cubic-bezier(.25, ${(0.25 * slope).toFixed(3)}, .24, 1)`;
+  }
+  track.style.setProperty("--sd", ms + "ms");
+  track.style.setProperty("--se", ease);
+  return ms;
+}
+
+function slide(dir, dx = 0, v = null) {
   const track = $("#track");
   S.animating = true;
   haptic();
@@ -668,6 +703,10 @@ function slide(dir) {
   const target = addDays(S.sel, dir);
   renderHeader(true, target);
   const sameWeek = moveStripTo(target);
+  const w = track.parentElement.clientWidth;
+  // скорость пальца учитывается, только если он двигался в сторону перелистывания (v === null — нажатие, не свайп)
+  const along = v === null ? null : (Math.sign(v) === -dir ? v : 0);
+  const ms = setSettle(track, w - Math.abs(dx), w, along);
   track.classList.add("anim");
   track.style.transform = `translate3d(${dir > 0 ? "-66.6667%" : "0%"},0,0)`;
   let done = false;
@@ -690,7 +729,7 @@ function slide(dir) {
     prefetchAround();
   };
   track.addEventListener("transitionend", finish, { once: true });
-  setTimeout(finish, 380);
+  setTimeout(finish, ms + 80);
 }
 
 function prefetchAround() {
@@ -735,12 +774,14 @@ function tick() {
 // ------------------------------------------------------------------ жесты: листание и «потяни, чтобы обновить»
 
 function attachPull(container, getScroller, ptrEl, onRefresh, allowHorizontal) {
-  let sx = 0, sy = 0, mode = null, dx = 0, dist = 0, t0 = 0, busy = false, previewDay = null;
+  let sx = 0, sy = 0, mode = null, dx = 0, dist = 0, busy = false, previewDay = null;
+  let raf = 0, samples = [];   // samples — последние положения пальца для скорости в момент отпускания
   ptrEl.innerHTML = icon("down");
+  const moveTrack = () => { raf = 0; $("#track").style.transform = `translate3d(calc(-33.3333% + ${dx}px),0,0)`; };
   container.addEventListener("touchstart", e => {
     if (S.animating || busy) { mode = "x"; return; }
     const t = e.touches[0];
-    sx = t.clientX; sy = t.clientY; mode = null; dx = 0; dist = 0; t0 = Date.now();
+    sx = t.clientX; sy = t.clientY; mode = null; dx = 0; dist = 0; samples = [];
     ptrEl.classList.remove("back");
   }, { passive: true });
 
@@ -755,7 +796,10 @@ function attachPull(container, getScroller, ptrEl, onRefresh, allowHorizontal) {
     if (mode === "h") {
       e.preventDefault();
       dx = mx;
-      $("#track").style.transform = `translate3d(calc(-33.3333% + ${dx}px),0,0)`;
+      const now = performance.now();
+      samples.push({ x: mx, t: now });
+      while (samples.length > 2 && now - samples[0].t > 100) samples.shift();
+      if (!raf) raf = requestAnimationFrame(moveTrack);   // не чаще одного раза за кадр
       // день в шапке меняется уже во время перетаскивания, как только палец прошёл треть экрана
       const want = Math.abs(dx) > container.clientWidth * 0.3 ? addDays(S.sel, dx < 0 ? 1 : -1) : S.sel;
       if (iso(want) !== previewDay) { previewDay = iso(want); renderHeader(false, want); moveStripTo(want); }
@@ -770,16 +814,22 @@ function attachPull(container, getScroller, ptrEl, onRefresh, allowHorizontal) {
 
   const end = async () => {
     if (mode === "h") {
-      const w = container.clientWidth, v = dx / Math.max(1, Date.now() - t0);
+      // последняя позиция пальца применяется сразу и фиксируется, чтобы доводка стартовала ровно с неё
+      if (raf) { cancelAnimationFrame(raf); moveTrack(); }
+      void $("#track").offsetWidth;
+      const w = container.clientWidth, first = samples[0], last = samples[samples.length - 1];
+      const v = first && last && last.t > first.t ? (last.x - first.x) / (last.t - first.t) : 0;   // px/мс
       const track = $("#track");
       previewDay = null;
-      if (dx < -w * 0.2 || v < -0.45) slide(1);
-      else if (dx > w * 0.2 || v > 0.45) slide(-1);
+      // бросок засчитывается, только если палец движется в ту же сторону, куда тянули
+      if (dx < -w * 0.2 || (v < -0.45 && dx < 0)) slide(1, dx, v);
+      else if (dx > w * 0.2 || (v > 0.45 && dx > 0)) slide(-1, dx, v);
       else {
         renderHeader(false, S.sel); moveStripTo(S.sel);   // недотянули - вернуть день обратно
+        const ms = setSettle(track, Math.abs(dx), w, Math.sign(v) === -Math.sign(dx) ? v : 0);
         track.classList.add("anim");
         track.style.transform = "translate3d(-33.3333%,0,0)";
-        setTimeout(() => track.classList.remove("anim"), 300);
+        setTimeout(() => track.classList.remove("anim"), ms + 20);
       }
     } else if (mode === "pull") {
       ptrEl.classList.add("back");

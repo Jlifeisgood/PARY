@@ -178,8 +178,10 @@ svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width:
 }
 .avatar img { width: 100%; height: 100%; object-fit: cover; }
 .content { position: relative; flex: 1; overflow: hidden; }
-.tab { position: absolute; inset: 0; display: flex; flex-direction: column; opacity: 0; pointer-events: none; transform: translateY(14px); transition: opacity .25s var(--ease), transform .35s var(--ease); }
-.tab.active { opacity: 1; pointer-events: auto; transform: none; }
+/* скрытая вкладка после перехода становится visibility:hidden — браузер её не отрисовывает и не держит в кадре */
+.tab { position: absolute; inset: 0; display: flex; flex-direction: column; opacity: 0; pointer-events: none; transform: translateY(14px); visibility: hidden;
+  transition: opacity .25s var(--ease), transform .35s var(--ease), visibility 0s linear .35s; }
+.tab.active { opacity: 1; pointer-events: auto; transform: none; visibility: visible; transition-delay: 0s; }
 .scroll { flex: 1; overflow-y: auto; padding: 6px 16px 28px; }
 
 /* нижняя навигация */
@@ -219,8 +221,9 @@ svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width:
 
 /* листание дней */
 .pager { position: relative; flex: 1; overflow: hidden; }
-.track { display: flex; width: 300%; height: 100%; transform: translate3d(-33.3333%, 0, 0); }
-.track.anim { transition: transform .3s var(--ease); will-change: transform; }
+/* слой создаётся заранее (без рывка в начале свайпа); длительность доводки (--sd) задаёт JS по скорости пальца */
+.track { display: flex; width: 300%; height: 100%; transform: translate3d(-33.3333%, 0, 0); will-change: transform; }
+.track.anim { transition: transform var(--sd, .3s) var(--se, cubic-bezier(.22, .8, .24, 1)); }
 .page { width: 33.3333%; height: 100%; overflow-y: auto; padding: 4px 16px 26px; contain: content; }
 .page.enter-r { animation: fromR .32s var(--ease); }
 .page.enter-l { animation: fromL .32s var(--ease); }
@@ -235,7 +238,8 @@ svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width:
   position: relative; overflow: hidden; display: grid; grid-template-columns: 56px 1fr; gap: 12px;
   background: var(--surface); border-radius: 22px; padding: 15px 15px 15px 16px; margin-bottom: 10px; box-shadow: var(--shadow);
 }
-.lesson.anim, .task.anim, .grade.anim, .empty.anim { animation: cardIn .42s var(--ease) both; animation-delay: calc(var(--i, 0) * 45ms); will-change: transform, opacity; }
+/* задержка каскада ограничена 8 карточками: в длинных списках нижние не ждут по секунде */
+.lesson.anim, .task.anim, .grade.anim, .empty.anim { animation: cardIn .42s var(--ease) both; animation-delay: calc(min(var(--i, 0), 8) * 40ms); }
 @keyframes cardIn { from { opacity: 0; transform: translateY(14px); } }
 .lesson::before { content: ""; position: absolute; z-index: 2; left: 0; top: 16px; bottom: 16px; width: 4px; border-radius: 0 4px 4px 0; background: var(--kc); }
 .k-lecture { --kc: #6366f1; --kcs: rgba(99, 102, 241, .13); --kct: #4f46e5; }
@@ -277,8 +281,10 @@ svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width:
 .batt { position: relative; width: 28px; height: 14px; border: 2px solid currentColor; border-radius: 4px; }
 .batt::after { content: ""; position: absolute; right: -5px; top: 3px; width: 3px; height: 4px; border-radius: 0 2px 2px 0; background: currentColor; }
 .batt i { position: absolute; left: 1.5px; top: 1.5px; bottom: 1.5px; right: 1.5px; transform-origin: left; transform: scaleX(var(--p, 0)); border-radius: 1.5px; background: currentColor; transition: transform 1s linear; }
-.live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: ping 1.8s ease-out infinite; }
-@keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, .5); } 70%, 100% { box-shadow: 0 0 0 7px rgba(34, 197, 94, 0); } }
+/* «пульс» — кольцо на transform/opacity (раньше box-shadow: перерисовка каждый кадр, пока идёт пара) */
+.live-dot { position: relative; width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+.live-dot::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: rgba(34, 197, 94, .5); animation: ping 1.8s ease-out infinite; }
+@keyframes ping { 0% { transform: scale(1); opacity: 1; } 70%, 100% { transform: scale(2.75); opacity: 0; } }
 
 .break { display: flex; align-items: center; gap: 10px; margin: 2px 8px 12px; color: var(--muted); font-size: 12.5px; font-weight: 600; }
 .break::before, .break::after { content: ""; flex: 1; border-top: 1.5px dashed var(--line); }
@@ -308,8 +314,10 @@ svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width:
 .em-next { margin-top: 18px; border: 0; padding: 11px 16px; border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); font-weight: 700; font-size: 14px; color: var(--primary-text); display: inline-flex; gap: 8px; align-items: center; }
 
 /* скелет загрузки */
-.sk { height: 96px; border-radius: 22px; margin-bottom: 10px; background: linear-gradient(90deg, var(--surface) 30%, var(--surface2) 50%, var(--surface) 70%); background-size: 250% 100%; animation: shimmer 1.4s linear infinite; }
-@keyframes shimmer { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+/* блик заглушки бежит через transform (раньше background-position — перерисовка каждый кадр) */
+.sk { position: relative; overflow: hidden; height: 96px; border-radius: 22px; margin-bottom: 10px; background: var(--surface); }
+.sk::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 20%, var(--surface2) 50%, transparent 80%); transform: translateX(-100%); animation: shimmer 1.4s linear infinite; }
+@keyframes shimmer { to { transform: translateX(100%); } }
 .sk-hint { text-align: center; color: var(--muted); font-size: 13px; margin: 14px 10px; animation: fadeIn .6s .8s both; }
 
 /* ---------------------------------------------------------------- задания */
@@ -450,3 +458,8 @@ body.sheet-open #sheet { transform: none; }
   transform: translateY(30px); opacity: 0; pointer-events: none; transition: transform .35s var(--spring), opacity .25s;
 }
 #toast.show { transform: none; opacity: 1; }
+
+/* ---------------------------------------------------------------- системная настройка «уменьшить движение» */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; animation-delay: 0s !important; transition-duration: .01ms !important; }
+}
