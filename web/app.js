@@ -368,6 +368,14 @@ function renderHeader(anim, date) {
     const sem = S.grades && (S.grades.semesters || []).find(s => s.code === S.grades.semester);
     sub = sem ? sem.name : (S.me && S.me.semesterName) || "";
   }
+  // «Сегодня» — только в расписании и только если открыт другой день; стрелка смотрит в сторону сегодня
+  const gt = $("#go-today"), away = S.tab === "schedule" && iso(d) !== iso(today());
+  if (away) {
+    const back = d > today();
+    if (gt.hidden || gt.classList.contains("back") !== back) gt.innerHTML = (back ? icon("arrow") : "") + esc(T.today) + (back ? "" : icon("arrow"));
+    gt.classList.toggle("back", back);
+  }
+  gt.hidden = !away;
   const t = $("#t-title"), s = $("#t-sub");
   if (t.textContent === title && s.textContent === sub) return;
   t.textContent = title;
@@ -937,6 +945,13 @@ function taskHtml(t, idx, i, anim) {
   </div>`;
 }
 
+function taskGroup(x) {
+  if (x.st !== "active") return x.st;   // overdue / done
+  if (!x.t.deadline) return "none";
+  const days = Math.round((dayStart(fromEpoch(x.t.deadline)) - today()) / MS_DAY);
+  return days <= 0 ? "today" : days === 1 ? "tomorrow" : days < 7 ? "week" : "later";
+}
+
 function renderTasks(anim) {
   const box = $("#tasks-scroll");
   if (!S.tasks) { box.innerHTML = `<div class="sk"></div><div class="sk" style="opacity:.6"></div>`; return; }
@@ -952,7 +967,19 @@ function renderTasks(anim) {
     ? (a.t.deadline || 9e12) - (b.t.deadline || 9e12)
     : (b.t.deadline || 0) - (a.t.deadline || 0)));
 
-  const body = list.length ? list.map((x, i) => taskHtml(x.t, x.idx, i, anim)).join("")
+  // группы по сроку идут подряд, т.к. список уже отсортирован (активные по дедлайну → просроченные → выполненные)
+  const groups = {};
+  list.forEach(x => { x.g = taskGroup(x); groups[x.g] = (groups[x.g] || 0) + 1; });
+  const withHeaders = S.taskFilter !== "done";
+  let prev = null;
+  const body = list.length ? list.map((x, i) => {
+    let head = "";
+    if (withHeaders && x.g !== prev) {
+      head = `<div class="section${x.g === "overdue" || x.g === "today" ? " red" : ""}">${esc(T.grp[x.g])}<small>${groups[x.g]}</small></div>`;
+      prev = x.g;
+    }
+    return head + taskHtml(x.t, x.idx, i, anim);
+  }).join("")
     : `<div class="empty anim"><div class="em-ico">${icon(S.taskFilter === "active" ? "party" : "tasks")}</div>
        <h3>${esc(S.taskFilter === "active" ? T.noActiveTasks : T.noTasks)}</h3></div>`;
   box.innerHTML = (S.tasks.stale ? `<div class="note">${icon("info")}<span>${esc(T.staleData)}</span></div>` : "") +
@@ -1281,6 +1308,7 @@ function bindEvents() {
     if (e.target.closest("[data-go-exams]")) { haptic(); setTab("grades"); return; }
     if (e.target.closest("[data-retry]")) { ensureWeek(mondayOf(S.sel), true); renderPager(false); }
   });
+  $("#go-today").addEventListener("click", () => goToDate(today()));
 
   $("#tasks-scroll").addEventListener("click", e => {
     const f = e.target.closest("[data-filter]");

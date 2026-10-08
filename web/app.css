@@ -170,6 +170,19 @@ svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width:
 .t-title { font-size: 27px; font-weight: 800; letter-spacing: -.025em; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .t-sub { color: var(--muted); font-size: 13.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .t-anim { animation: titleIn .35s var(--ease); }
+/* «Сегодня» — появляется, когда в расписании открыт другой день */
+.go-today { flex: none; border: 0; padding: 8px 13px; border-radius: 99px; background: var(--primary-soft); color: var(--primary-text);
+  font-size: 13px; font-weight: 800; display: flex; align-items: center; gap: 5px; animation: pop .35s var(--spring); }
+.go-today[hidden] { display: none; }
+.go-today svg { width: 15px; height: 15px; }
+.go-today.back svg { transform: scaleX(-1); }
+
+/* заголовки разделов (экзамены, ресурсы, группы заданий) */
+.section { display: flex; align-items: center; gap: 8px; margin: 16px 4px 9px; font-size: 12.5px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.section:first-child { margin-top: 4px; }
+.section small { padding: 1px 7px; border-radius: 99px; background: var(--surface2); font-size: 11px; letter-spacing: 0; }
+.section.red { color: var(--red); }
 @keyframes titleIn { from { opacity: 0; transform: translateY(6px); } }
 .avatar {
   width: 44px; height: 44px; border-radius: 50%; border: 0; padding: 0; overflow: hidden; flex: none;
