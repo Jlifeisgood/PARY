@@ -13,7 +13,7 @@ const S = {
   state: null, me: null, tab: "schedule", sel: null,
   weeks: {}, pending: {},
   tasks: null, taskFilter: "active", openTask: null,
-  grades: null, gradesSem: null, exams: null,
+  grades: null, gradesSem: null, exams: null, att: null, res: {}, openSubject: null,
   reminders: [10], animating: false, lastToast: 0,
 };
 
@@ -321,7 +321,15 @@ function showMain() {
   loadTasks(false, true);
   loadExams(false);
   if (S.reminders.length) { try { A && A.askNotificationsOnce(); } catch (e) { } }
+  // запуск из уведомления (например, о новой оценке) — сразу нужная вкладка
+  try { const t = A && A.takeStartTab ? A.takeStartTab() : ""; if (t) openTab(t); } catch (e) { }
 }
+
+// вызывается и из приложения (уведомление пришло, когда приложение уже открыто)
+window.openTab = tab => {
+  if (!["schedule", "tasks", "grades", "resources"].includes(tab) || $("#main").hidden) return;
+  if (S.tab !== tab) setTab(tab);
+};
 
 async function loadMe(force) {
   const r = await api("me" + (force ? "?refresh=1" : ""));
@@ -409,7 +417,7 @@ function setTab(tab, silent) {
   renderHeader(true);
   nextFrame(() => $$(".tab").forEach(el => el.classList.toggle("active", el.id === "tab-" + S.tab)));
   if (tab === "tasks") loadTasks(false);
-  if (tab === "grades") { loadGrades(false); loadExams(false); }
+  if (tab === "grades") { loadGrades(false); loadExams(false); loadAttendance(false); }
 }
 
 // ------------------------------------------------------------------ расписание: данные
@@ -869,7 +877,7 @@ async function refreshAll() {
   const m = mondayOf(S.sel);
   const jobs = [ensureWeek(m, true), loadMe(true)];
   if (S.tab === "tasks") jobs.push(loadTasks(true));
-  if (S.tab === "grades") jobs.push(loadGrades(true));
+  if (S.tab === "grades") { jobs.push(loadGrades(true)); jobs.push(loadAttendance(true)); S.res = {}; }
   await Promise.all(jobs);
   toast(T.updated);
 }
@@ -1068,6 +1076,90 @@ function percentOf(o) {
 }
 const rateClass = p => p === null ? "r0" : p >= 86 ? "r5" : p >= 71 ? "r4" : p >= 55 ? "r3" : "r2";
 
+// ---- пропуски и материалы (нужна версия приложения 2.7+; в браузере их отдаёт dev-mock)
+const hasStudyApi = () => { try { return !window.Android || !!A.takeStartTab; } catch (e) { return false; } };
+const isCurrentSem = () => !S.me || !S.grades || !S.grades.semester || String(S.grades.semester) === String(S.me.semesterCode);
+const attOf = id => S.att && S.att.items ? S.att.items.find(a => String(a.id) === String(id)) : null;
+
+async function loadAttendance(force) {
+  if (!hasStudyApi()) return;
+  if (!S.att) S.att = store.get("att:" + L);
+  const r = await api(`attendance${force ? "?refresh=1" : ""}`);
+  if (r.ok) {
+    S.att = r;
+    store.set("att:" + L, r);
+  }
+  if (S.tab === "grades") patchGrades();
+}
+
+async function loadResources(id, force) {
+  const cur = S.res[id];
+  if (!force && cur && (cur.loading || cur.items)) return;
+  S.res[id] = { loading: true };
+  const r = await api(`resources?subject=${encodeURIComponent(id)}${force ? "&refresh=1" : ""}`);
+  S.res[id] = r.ok ? r : { error: r };
+  if (S.tab === "grades") patchGrades();
+}
+
+function attChip(id) {
+  const a = attOf(id);
+  if (!a) return "";
+  return a.count
+    ? `<span class="att warn">${icon("clock")}${esc(T.absShort(a.count, a.hours))}</span>`
+    : `<span class="att">${icon("check")}${esc(T.noAbsences)}</span>`;
+}
+
+function subjectDetails(id) {
+  const a = attOf(id);
+  let html = `<div class="section">${esc(T.absencesTitle)}${a && a.count ? `<small>${a.count}</small>` : ""}</div>`;
+  if (!a) html += `<div class="sk" style="height:44px"></div>`;
+  else if (!a.count) html += `<div class="g-empty ok">${icon("check")}${esc(T.noAbsences)}</div>`;
+  else html += [...a.list].sort((x, y) => (y.date || 0) - (x.date || 0)).map(x => {
+    const d = x.date ? fromEpoch(x.date) : null;
+    return `<div class="abs-row"><b>${d ? esc(fmtDate(d)) : "—"}${x.start ? ", " + esc(x.start) : ""}</b>
+      <span>${esc(x.type || "")}</span>${x.excused ? `<em>${esc(T.excused)}</em>` : ""}${x.hours ? `<i>${x.hours} ${esc(T.hShort)}</i>` : ""}</div>`;
+  }).join("");
+
+  html += `<div class="section">${esc(T.materials)}</div>`;
+  const r = S.res[id];
+  if (!r || r.loading) html += `<div class="sk" style="height:58px"></div>`;
+  else if (r.error) html += `<div class="g-empty">${esc(T.materialsError)} · <button class="link" data-res-retry="${esc(id)}">${esc(T.retry)}</button></div>`;
+  else if (!r.items.length) html += `<div class="g-empty">${esc(T.noMaterials)}</div>`;
+  else html += r.items.map(m => {
+    const files = (m.files || []).filter(f => f.url).map(f =>
+      `<button class="file press" data-url="${esc(f.url)}">${icon("file")}<span>${esc(f.name || f.url)}</span>${icon("arrow")}</button>`).join("");
+    const link = m.url ? `<button class="file press" data-url="${esc(m.url)}">${icon("external")}<span>${esc(T.openLink)}</span>${icon("arrow")}</button>` : "";
+    const meta = [m.type, m.teacher].filter(Boolean).join(" · ");
+    const note = plainText(m.comment);
+    return `<div class="mat"><b>${esc(m.title || T.materials)}</b>${meta ? `<small>${esc(meta)}</small>` : ""}${note ? `<p>${esc(note)}</p>` : ""}${files}${link}</div>`;
+  }).join("");
+  return html;
+}
+
+// точечно обновляет строки пропусков и раскрытый предмет — без полной перерисовки (иначе заново проигрываются кольца)
+function patchGrades() {
+  $$("#grades-scroll .grade[data-id]").forEach(card => {
+    const id = card.dataset.id;
+    const att = card.querySelector(".g-att");
+    if (att) att.innerHTML = attChip(id);
+    const det = card.querySelector(".g-det");
+    if (det && card.classList.contains("open")) det.innerHTML = subjectDetails(id);
+  });
+}
+
+function toggleSubject(card) {
+  const id = card.dataset.id;
+  const open = S.openSubject !== id;
+  S.openSubject = open ? id : null;
+  haptic();
+  $$("#grades-scroll .grade.open").forEach(c => { if (c !== card) c.classList.remove("open"); });
+  if (open) {
+    card.querySelector(".g-det").innerHTML = subjectDetails(id);
+    loadResources(id);
+  }
+  card.classList.toggle("open", open);
+}
+
 function gradeHtml(s, i) {
   const p = percentOf(s.overall);
   const exams = (s.exams || []).map(e => {
@@ -1076,12 +1168,18 @@ function gradeHtml(s, i) {
   }).join("");
   const info = [s.credit !== null && s.credit !== undefined && s.credit !== "" ? `${T.credits}: ${s.credit}` : "", s.overall && s.overall.label].filter(Boolean).join(" · ");
   const mark = s.overall && s.overall.grade !== null && s.overall.grade !== undefined && s.overall.grade !== "" ? esc(s.overall.grade) : "";
-  return `<div class="grade anim ${rateClass(p)}" style="--i:${i}">
+  // пропуски и материалы — только для текущего семестра и при поддержке со стороны приложения
+  const study = hasStudyApi() && isCurrentSem() && s.id !== null && s.id !== undefined;
+  const id = study ? String(s.id) : "";
+  const open = study && S.openSubject === id;
+  return `<div class="grade anim ${rateClass(p)}${study ? " expandable" : ""}${open ? " open" : ""}" style="--i:${i}"${study ? ` data-id="${esc(id)}"` : ""}>
     <div class="g-head">
       <div class="ring"><svg viewBox="0 0 44 44"><circle class="rg-bg" cx="22" cy="22" r="18"/><circle class="rg" cx="22" cy="22" r="18" style="--p:${p === null ? 0 : p.toFixed(1)}"/></svg><b>${p === null ? "—" : Math.round(p)}</b></div>
-      <div class="g-name"><b>${esc(translateSubject(s.name, L))}</b><small>${esc(info)}</small></div>
+      <div class="g-name"><b>${esc(translateSubject(s.name, L))}</b><small>${esc(info)}</small>${study ? `<div class="g-att">${attChip(id)}</div>` : ""}</div>
       ${mark && num(mark) !== null && num(mark) <= 5 ? `<div class="g-mark">${mark}</div>` : ""}
-    </div>${exams ? `<div class="bars">${exams}</div>` : ""}</div>`;
+      ${study ? `<span class="g-chev">${icon("down")}</span>` : ""}
+    </div>${exams ? `<div class="bars">${exams}</div>` : ""}
+    ${study ? `<div class="g-more"><div><div class="g-det">${open ? subjectDetails(id) : ""}</div></div></div>` : ""}</div>`;
 }
 
 function renderGrades(anim) {
@@ -1215,7 +1313,7 @@ function onSheetClick(e) {
   if (langBtn && langBtn.dataset.v !== L) {
     setLang(langBtn.dataset.v, true);
     S.me = store.get("me:" + L) || S.me;
-    S.tasks = null; S.grades = null; S.exams = null;
+    S.tasks = null; S.grades = null; S.exams = null; S.att = null; S.res = {}; S.openSubject = null;
     setSheet(settingsHtml());
     renderPager(false);
     renderHeader(true);
@@ -1260,7 +1358,7 @@ function onSheetClick(e) {
     case "logout-yes":
       try { A && A.logout(); } catch (err) { }
       store.clear();
-      S.me = null; S.weeks = {}; S.tasks = null; S.grades = null; S.exams = null; S.exams = null;
+      S.me = null; S.weeks = {}; S.tasks = null; S.grades = null; S.exams = null; S.att = null; S.res = {}; S.openSubject = null;
       closeSheet();
       showLogin();
       break;
@@ -1327,8 +1425,15 @@ function bindEvents() {
 
   $("#grades-scroll").addEventListener("click", e => {
     const s = e.target.closest("[data-sem]");
-    if (s && (!S.grades || s.dataset.sem !== S.grades.semester)) { S.gradesSem = s.dataset.sem; haptic(); loadGrades(false, s.dataset.sem); return; }
-    if (e.target.closest("[data-retry]")) loadGrades(true);
+    if (s && (!S.grades || s.dataset.sem !== S.grades.semester)) { S.gradesSem = s.dataset.sem; S.openSubject = null; haptic(); loadGrades(false, s.dataset.sem); return; }
+    if (e.target.closest("[data-retry]")) { loadGrades(true); return; }
+    const file = e.target.closest("[data-url]");
+    if (file) { haptic(); try { A ? A.openUrl(file.dataset.url) : window.open(file.dataset.url); } catch (err) { } return; }
+    const rr = e.target.closest("[data-res-retry]");
+    if (rr) { loadResources(rr.dataset.resRetry, true); patchGrades(); return; }
+    if (e.target.closest(".g-det")) return;   // нажатия внутри раскрытой части не сворачивают карточку
+    const card = e.target.closest(".grade.expandable");
+    if (card) toggleSubject(card);
   });
 
   $("#resources-scroll").addEventListener("click", e => {

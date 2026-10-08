@@ -391,6 +391,37 @@ svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width:
 .g-name b { display: block; font-size: 15.5px; line-height: 1.28; }
 .g-name small { color: var(--muted); font-size: 12.5px; font-weight: 600; }
 .g-mark { font-size: 22px; font-weight: 800; color: var(--rc); }
+
+/* предмет: пропуски и учебные материалы (раскрывается по нажатию) */
+.grade.expandable { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.g-chev { flex: none; color: var(--muted); font-size: 18px; display: grid; transition: transform .3s var(--ease); }
+.grade.open .g-chev { transform: rotate(180deg); }
+.g-att:empty { display: none; }
+.att { display: inline-flex; align-items: center; gap: 4px; margin-top: 5px; padding: 2px 9px 2px 7px; border-radius: 99px; font-size: 12px; font-weight: 700;
+  background: var(--green-soft); color: var(--green); animation: fadeIn .3s var(--ease); }
+.att svg { width: 13px; height: 13px; }
+.att.warn { background: var(--amber-soft); color: var(--amber-text); }
+.g-more { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .35s var(--ease); }
+.g-more > div { overflow: hidden; }
+.grade.open .g-more { grid-template-rows: 1fr; }
+.g-det { margin-top: 12px; padding-top: 2px; border-top: 1px solid var(--line); cursor: default; }
+.g-det .section { margin: 12px 0 7px; }
+.g-det .sk { margin-bottom: 6px; border-radius: 14px; }
+.g-empty { display: flex; align-items: center; gap: 6px; padding: 2px 2px 6px; color: var(--muted); font-size: 13.5px; }
+.g-empty.ok { color: var(--green); font-weight: 600; }
+.g-empty svg { width: 16px; height: 16px; }
+.abs-row { display: flex; align-items: center; gap: 8px; padding: 7px 2px; font-size: 13.5px; border-bottom: 1px dashed var(--line); }
+.abs-row:last-of-type { border-bottom: 0; }
+.abs-row b { font-weight: 700; white-space: nowrap; }
+.abs-row span { flex: 1; min-width: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.abs-row em { font-style: normal; font-size: 11.5px; font-weight: 700; padding: 1px 7px; border-radius: 99px; background: var(--green-soft); color: var(--green); }
+.abs-row i { font-style: normal; font-weight: 700; color: var(--amber-text); white-space: nowrap; }
+.mat { padding: 11px 12px; margin-bottom: 8px; border-radius: 14px; background: var(--surface2); }
+.mat b { display: block; font-size: 14px; line-height: 1.3; }
+.mat small { display: block; margin-top: 2px; color: var(--muted); font-size: 12.5px; }
+.mat p { margin: 6px 0 0; font-size: 13px; white-space: pre-wrap; word-break: break-word; -webkit-user-select: text; user-select: text; }
+.mat .file { background: var(--surface); }
+.link { border: 0; background: none; padding: 0; color: var(--primary-text); font: inherit; font-weight: 700; text-decoration: underline; }
 .bars { margin-top: 12px; display: grid; gap: 7px; }
 .bar { display: grid; grid-template-columns: minmax(70px, 34%) 1fr auto; align-items: center; gap: 10px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
 .bar i { height: 7px; border-radius: 4px; background: var(--surface2); overflow: hidden; }
