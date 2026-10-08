@@ -196,7 +196,7 @@ function startSplash() {
   // отрывающийся лист = вложенные полоски (.seg), каждая гнётся чуть сильнее — получается изгиб бумаги
   const curl = d => {
     let html = "";
-    for (let s = CURL_SEGS - 1; s >= 0; s--) html = `<div class="seg" style="--i:${s}"><div class="face">${face(d)}</div>${html}</div>`;
+    for (let s = CURL_SEGS - 1; s >= 0; s--) html = `<div class="cs-seg" style="--i:${s}"><div class="cs-clip"><div class="cs-face">${face(d)}</div></div>${html}</div>`;
     return html;
   };
   let sheets = "";
@@ -578,6 +578,8 @@ function pageHtml(date, anim) {
   else if (w.outdated) html += `<div class="note">${icon("info")}<span>${esc(T.outdated)}</span></div>`;
   const list = lessonsOn(date);
   if (!list.length) return html + emptyHtml(date, anim);
+  // сводка дня: сколько пар и с какого по какое время
+  html += `<div class="day-sum${anim ? " anim" : ""}">${icon("clock")}<b>${esc(T.pairsCount(list.length))}</b><span>${esc(list[0].start)}–${esc(list[list.length - 1].end)}</span></div>`;
 
   const states = list.map(l => lessonState(l, date));
   const nowIdx = states.indexOf("now");

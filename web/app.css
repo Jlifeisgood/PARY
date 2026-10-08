@@ -76,12 +76,14 @@ svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width:
 /* гибкий отрыв: лист собран из полосок (.seg), которые сгибаются как бумага, и всплывает, растворяясь */
 .cal-sheet.flip { background: transparent; box-shadow: none; overflow: visible; transform-style: preserve-3d;
   transform-origin: top center; animation: curlAway var(--fd, 1.15s) linear forwards; animation-delay: var(--d); }
-.cal-sheet.flip .seg { position: absolute; left: 0; top: 0; width: 100%; height: var(--segh); transform-origin: top center;
-  transform-style: preserve-3d; overflow: hidden; animation: segCurl var(--fd, 1.15s) linear forwards;
+.cal-sheet.flip .cs-seg { position: absolute; left: 0; top: 0; width: 100%; height: var(--segh); transform-origin: top center;
+  transform-style: preserve-3d; animation: segCurl var(--fd, 1.15s) linear forwards;
   animation-delay: calc(var(--d) + (var(--sn) - var(--i)) * .035s); }
-.cal-sheet.flip > .seg { top: 0; }
-.cal-sheet.flip .seg > .seg { top: 100%; }
-.cal-sheet.flip .seg > .face { position: absolute; left: 0; width: 100%; height: var(--sheeth); top: calc(-1 * var(--i) * var(--segh));
+.cal-sheet.flip > .cs-seg { top: 0; }
+.cal-sheet.flip .cs-seg > .cs-seg { top: 100%; }
+/* обрезка — только у внутреннего слоя; следующая полоска лежит рядом с ним и не обрезается */
+.cal-sheet.flip .cs-clip { position: absolute; inset: 0; overflow: hidden; }
+.cal-sheet.flip .cs-clip > .cs-face { position: absolute; left: 0; width: 100%; height: var(--sheeth); top: calc(-1 * var(--i) * var(--segh));
   border-radius: 24px; overflow: hidden; background: #fff; display: flex; flex-direction: column; }
 .sp-name { position: relative; margin-top: 28px; font-size: 42px; font-weight: 800; letter-spacing: -.02em; display: flex; }
 .sp-name span { display: inline-block; transform: translateY(28px); opacity: 0; animation: letterIn .5s var(--spring) both; }
@@ -93,6 +95,7 @@ svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width:
 @keyframes curlAway {
   0% { transform: translate(0, 0) rotate(0deg); opacity: 1; animation-timing-function: cubic-bezier(.5, 0, .85, .35); }
   40% { transform: translate(0, 0) rotate(0deg); opacity: 1; animation-timing-function: cubic-bezier(.35, .1, .5, 1); }
+  80% { opacity: 1; }   /* бумага непрозрачна, растворяется только в самом конце */
   100% { transform: translate(9%, -46%) rotate(7deg); opacity: 0; }
 }
 @keyframes segCurl {
@@ -104,7 +107,6 @@ svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width:
 @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes fadeIn { from { opacity: 0; } }
 @keyframes splashOut { to { opacity: 0; transform: scale(1.08); } }
-.cal-sheet.flip { --fd: .5s; }
 
 /* ---------------------------------------------------------------- вход */
 #login {
@@ -280,6 +282,10 @@ svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width:
 
 .break { display: flex; align-items: center; gap: 10px; margin: 2px 8px 12px; color: var(--muted); font-size: 12.5px; font-weight: 600; }
 .break::before, .break::after { content: ""; flex: 1; border-top: 1.5px dashed var(--line); }
+.day-sum { display: flex; align-items: center; gap: 7px; margin: 0 2px 10px; font-size: 13.5px; color: var(--muted); }
+.day-sum svg { width: 16px; height: 16px; }
+.day-sum b { color: var(--text); font-weight: 700; }
+.day-sum span::before { content: "·"; margin-right: 7px; }
 .exam-banner { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; border: 0; border-radius: 18px;
   padding: 13px 15px; margin-bottom: 12px; background: linear-gradient(135deg, var(--primary), var(--primary2)); color: #fff;
   box-shadow: 0 12px 26px -14px var(--primary); animation: fadeUp .4s var(--ease); }
