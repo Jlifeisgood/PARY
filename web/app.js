@@ -1220,7 +1220,9 @@ function percentOf(o) {
   const g = num(o.grade), m = num(o.max);
   return g !== null && m ? Math.max(0, Math.min(100, g / m * 100)) : null;
 }
-const rateClass = p => p === null ? "r0" : p >= 86 ? "r5" : p >= 71 ? "r4" : p >= 55 ? "r3" : "r2";
+// минимальный балл (из 100) для оценок 5 / 4 / 3 — единый источник для цвета колец и прогноза
+const GRADE_TH = { 5: 90, 4: 70, 3: 60 };
+const rateClass = p => p === null ? "r0" : p >= GRADE_TH[5] ? "r5" : p >= GRADE_TH[4] ? "r4" : p >= GRADE_TH[3] ? "r3" : "r2";
 
 // ---- пропуски и материалы (нужна версия приложения 2.7+; в браузере их отдаёт dev-mock)
 const hasStudyApi = () => { try { return !window.Android || !!A.takeStartTab; } catch (e) { return false; } };
@@ -1307,14 +1309,15 @@ function toggleSubject(card) {
 }
 
 // «Сколько нужно набрать ещё»: если баллы за часть контролей уже есть, а до 100 ещё не хватает,
-// показывает минимум для оценок 3 / 4 / 5 (пороги 55 / 71 / 86 — те же, что у цвета колец)
+// показывает минимум для оценок 3 / 4 / 5 (пороги GRADE_TH — те же, что у цвета колец)
 function forecastHtml(s) {
   const ex = (s.exams || []).filter(e => num(e.grade) !== null && num(e.max) !== null);
   if (!ex.length) return "";
   const got = ex.reduce((a, e) => a + num(e.grade), 0), used = ex.reduce((a, e) => a + num(e.max), 0);
   const rem = Math.round(100 - used);
   if (rem < 5) return "";   // всё уже оценено
-  const chips = [[3, 55], [4, 71], [5, 86]].map(([g, th]) => {
+  const chips = [3, 4, 5].map(g => {
+    const th = GRADE_TH[g];
     const need = Math.ceil(th - got);
     if (need <= 0) return `<b class="fc-ok">${g} ✓</b>`;
     if (need > rem) return `<b class="fc-no">${g} —</b>`;
