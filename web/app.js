@@ -1464,9 +1464,15 @@ const canOpenInApp = () => { try { return !!(window.Android && A.openInApp); } c
 function renderResources() {
   const box = $("#resources-scroll");
   const inApp = canOpenInApp();
-  box.innerHTML =
-    `<div class="section" style="margin-top:4px">${esc(T.resServices)}</div>` +
-    `<div class="res-list">${RESOURCES.map((r, i) => resCard(r, i, inApp)).join("")}</div>` +
+  // «Научные работы» вынесены сюда отдельной карточкой — раньше их можно было найти только через лупу в расписании
+  const tools = `<div class="section" style="margin-top:4px">${esc(T.resTools)}</div><div class="res-list">
+    <button class="res r-pub anim" style="--i:0" data-tool="pubs">
+      <span class="res-ic">${icon("search")}</span>
+      <span class="res-tx"><b>${esc(T.resPubs)}</b><small>${esc(T.resPubsSub)}</small></span>
+      <span class="res-go">${icon("arrow")}</span></button></div>`;
+  box.innerHTML = tools +
+    `<div class="section">${esc(T.resServices)}</div>` +
+    `<div class="res-list">${RESOURCES.map((r, i) => resCard(r, i + 1, inApp)).join("")}</div>` +
     `<div class="res-hint">${icon("info")}<span>${esc(inApp ? T.openInBrowser : T.updateForInApp)}</span></div>`;
 }
 
@@ -1766,7 +1772,9 @@ function renderSearch() {
   if (!box || !input) return;
   const q = input.value.trim().toLowerCase();
   const all = upcomingLessons();
-  const foot = `<div class="actions" style="margin-top:16px"><button class="btn ghost" data-copy-week="1">${icon(canShare() ? "send" : "copy")}${esc(canShare() ? T.shareWeek : T.copyWeek)}</button></div>`;
+  // на старой версии приложения вкладки «Научные работы» нет — объясняем почему, а не молчим
+  const upd = has29() ? "" : `<p class="pub-note">${esc(T.needV29(S.state && S.state.version))}</p>`;
+  const foot = `<div class="actions" style="margin-top:16px"><button class="btn ghost" data-copy-week="1">${icon(canShare() ? "send" : "copy")}${esc(canShare() ? T.shareWeek : T.copyWeek)}</button></div>` + upd;
   if (!q) {
     const subjects = [...new Set(all.map(x => translateSubject(x.l.subject, L)))].sort((a, b) => a.localeCompare(b));
     const teachers = [...new Set(all.map(x => x.l.teacher).filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -1962,6 +1970,15 @@ function bindEvents() {
   });
 
   $("#resources-scroll").addEventListener("click", e => {
+    const tool = e.target.closest("[data-tool]");
+    if (tool) {
+      haptic();
+      if (has29()) openSearch("pub");
+      else openSheet(`<div class="confirm"><div class="em-ico" style="animation:none">${icon("search")}</div>
+        <p>${esc(T.needV29(S.state && S.state.version))}</p><div class="actions" style="margin-top:0">
+        <button class="btn ghost" data-act="close">OK</button></div></div>`);
+      return;
+    }
     const b = e.target.closest("[data-open]");
     if (b) { haptic(); openResource(b.dataset.open, b.dataset.title, b.dataset.ext === "1"); }
   });
