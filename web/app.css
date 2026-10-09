@@ -512,6 +512,26 @@ svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width:
 #note-in:focus { border-color: var(--primary); }
 .cp-hint { margin: 2px 2px 10px; color: var(--muted); font-size: 13.5px; line-height: 1.4; }
 
+/* научные работы преподавателя */
+.srch .seg { margin-bottom: 12px; }
+.pub-hint { margin: 14px 4px 2px; color: var(--muted); font-size: 14px; line-height: 1.45; }
+.pub-note { margin: 12px 4px 4px; color: var(--muted); font-size: 12px; line-height: 1.4; opacity: .85; }
+.pub-head { margin: 10px 4px 8px; color: var(--muted); font-size: 13px; font-weight: 700; }
+.pub { margin-bottom: 10px; padding: 13px 14px 12px; border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); }
+.pub-top { display: flex; align-items: flex-start; gap: 8px; }
+.pub-top b { flex: 1; min-width: 0; font-size: 14.5px; line-height: 1.32; word-break: break-word; }
+.pub-tag { flex: none; padding: 2px 8px; border-radius: 99px; background: var(--grad); color: #fff; font-size: 10.5px; font-weight: 800; letter-spacing: .03em; }
+.pub small { display: block; margin-top: 4px; font-size: 12.5px; line-height: 1.35; word-break: break-word; }
+.pub-src { color: var(--primary-text); font-weight: 600; }
+.pub-au { color: var(--muted); }
+.pub-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.pub-cit { margin-right: auto; color: var(--muted); font-size: 12px; font-weight: 700; }
+.pub-btn { display: inline-flex; align-items: center; gap: 6px; border: 0; padding: 8px 12px; border-radius: 11px; background: var(--primary-soft); color: var(--primary-text); font-size: 13px; font-weight: 700; }
+.pub-btn svg { width: 15px; height: 15px; }
+.pub-acts .pub-btn:first-of-type:nth-last-of-type(2) { margin-left: auto; }
+.pub-also { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 0 2px; color: var(--muted); font-size: 13px; font-weight: 600; }
+.ls-acts .ls-btn:last-child:nth-child(odd) { grid-column: 1 / -1; flex-direction: row; justify-content: center; gap: 10px; }
+
 .srch-box { display: flex; align-items: center; gap: 10px; padding: 0 14px; height: 50px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); }
 .srch-box svg { flex: none; width: 20px; height: 20px; color: var(--muted); }
 .srch-box input { flex: 1; min-width: 0; border: 0; outline: none; background: none; color: var(--text); font: inherit; font-size: 16px; }

@@ -584,6 +584,8 @@ function pruneNotes() {
 
 // «Поделиться» есть в приложении с версии 2.8; на более старых — копирование в буфер
 const canShare = () => { try { return !!(window.Android && A.shareText); } catch (e) { return false; } };
+// версия приложения 2.9+: «Добавить в календарь» и поиск научных работ (в браузере с тестовыми данными доступно всегда)
+const has29 = () => { try { return !window.Android || !!A.addToCalendar; } catch (e) { return false; } };
 function sendText(text) {
   if (canShare()) { haptic(); try { A.shareText(text); return; } catch (e) { } }
   copyText(text);
@@ -1015,6 +1017,12 @@ function taskAction(btn) {
   const card = btn.closest(".task"), t = S.tasks && S.tasks.items && S.tasks.items[+card.dataset.idx];
   if (!t) return;
   if (btn.dataset.taskAct === "copy") { sendText(taskText(t)); return; }
+  if (btn.dataset.taskAct === "cal") {
+    // событие «Срок: …» заканчивается в дедлайн, начинается за полчаса до него
+    const end = t.deadline * 1000;
+    try { A.addToCalendar(`${T.deadline}: ${t.name}`, end - 30 * 60e3, end, "", translateSubject(t.subject, L)); } catch (e) { }
+    return;
+  }
   const k = taskKey(t);
   if (TASKDONE[k]) delete TASKDONE[k]; else TASKDONE[k] = 1;
   store.set("taskdone", TASKDONE);
@@ -1090,6 +1098,7 @@ function taskHtml(t, idx, i, anim) {
   const mine = st === "done" && taskStateRaw(t) !== "done";   // отмечено самим студентом, а не HEMIS
   const acts = `<div class="tk-acts">
     ${taskStateRaw(t) !== "done" ? `<button class="tk-act press${mine ? " on" : ""}" data-task-act="done">${icon("check")}${esc(mine ? T.unmarkDone : T.markDone)}</button>` : ""}
+    ${has29() && t.deadline && st !== "done" ? `<button class="tk-act press" data-task-act="cal">${icon("calendar")}${esc(T.toCal)}</button>` : ""}
     <button class="tk-act press" data-task-act="copy">${icon(canShare() ? "send" : "copy")}${esc(canShare() ? T.share : T.copy)}</button></div>`;
   return `<div class="task st-${st} ${dl.urgency || ""}${anim ? " anim" : ""}${S.openTask === idx ? " open" : ""}" style="--i:${i}" data-idx="${idx}">
     <div class="tk-top"><span class="tk-subj">${esc(translateSubject(t.subject, L))}</span>${score}</div>
@@ -1505,6 +1514,22 @@ function openSettings() {
 }
 
 function onSheetClick(e) {
+  const sm = e.target.closest("#srch-mode button[data-v]");
+  if (sm) { switchSearchMode(sm); return; }
+  const pq = e.target.closest("[data-pubq]");
+  if (pq) {
+    const v = pq.dataset.pubq, i = $("#srch-in");
+    srchQ.pub = v; i.value = v; i.blur(); haptic(); clearTimeout(pubTimer); runPubs(v, true);
+    return;
+  }
+  const pu = e.target.closest("[data-purl]");
+  if (pu) { haptic(); openResource(pu.dataset.purl, pu.dataset.ptitle || "", false); return; }
+  const pc = e.target.closest("[data-pcite]");
+  if (pc) { const w = pubState.items[+pc.dataset.pcite]; if (w) copyText(pubCitation(w)); return; }
+  if (e.target.closest("[data-pub-more]")) { runPubs(pubState.q, false); return; }
+  if (e.target.closest("[data-pub-retry]")) { runPubs(pubState.q || srchQ.pub, true); return; }
+  const ps = e.target.closest("[data-pub-sort]");
+  if (ps) { if (ps.dataset.pubSort !== pubState.sort) { pubState.sort = ps.dataset.pubSort; haptic(); runPubs(pubState.q, true); } return; }
   const lsb = e.target.closest("[data-ls]");
   if (lsb) { lessonAction(lsb.dataset.ls); return; }
   const sgo = e.target.closest("[data-sgo]");
@@ -1607,6 +1632,8 @@ function lessonSheetHtml() {
       <button class="ls-btn press" data-ls="copy">${icon(canShare() ? "send" : "copy")}<span>${esc(canShare() ? T.share : T.copy)}</span></button>
       <button class="ls-btn press" data-ls="subject">${icon("grades")}<span>${esc(T.openSubject)}</span></button>
       <button class="ls-btn press" data-ls="next">${icon("calendar")}<span>${esc(T.nextSame)}</span></button>
+      ${has29() ? `<button class="ls-btn press" data-ls="cal">${icon("clock")}<span>${esc(T.addCal)}</span></button>` : ""}
+      ${has29() && l.teacher ? `<button class="ls-btn press" data-ls="works">${icon("book")}<span>${esc(T.teacherWorks)}</span></button>` : ""}
     </div></div>`;
 }
 
@@ -1643,6 +1670,16 @@ async function lessonAction(act) {
       break;
     }
     case "subject": goToSubject(ls.l.subject); break;
+    case "works": openSearch("pub", ls.l.teacher); break;
+    case "cal": {
+      const [y, m, d] = ls.date.split("-").map(Number), [h1, m1] = ls.l.start.split(":").map(Number), [h2, m2] = ls.l.end.split(":").map(Number);
+      const start = Date.UTC(y, m - 1, d, h1, m1 || 0) - TZ_OFFSET, end = Date.UTC(y, m - 1, d, h2, m2 || 0) - TZ_OFFSET;
+      try {
+        A.addToCalendar(`${translateSubject(ls.l.subject, L)} (${kindLabel(ls.l)})`, start, end,
+          [ls.l.room, ls.l.building].filter(Boolean).join(", "), [ls.l.teacher, NOTES[key]].filter(Boolean).join("\n"));
+      } catch (e) { }
+      break;
+    }
     case "next": {
       const from = parseIso(ls.date), monday = mondayOf(from);
       await Promise.all([1, 2, 3, 4, 5].map(i => ensureWeek(addDays(monday, 7 * i))));
@@ -1656,7 +1693,7 @@ async function lessonAction(act) {
   }
 }
 
-// ------------------------------------------------------------------ поиск по расписанию (ближайшие 4 недели)
+// ------------------------------------------------------------------ поиск: расписание (4 недели) и научные работы преподавателей
 
 function upcomingLessons() {
   const out = [], t0 = today();
@@ -1667,17 +1704,57 @@ function upcomingLessons() {
   return out;
 }
 
-function openSearch() {
+const srchQ = { sch: "", pub: "" };   // введённый текст — отдельно для каждой вкладки
+const pubState = { q: "", sort: "year", page: 1, items: [], total: 0, authors: 0, hasMore: false, loading: false, error: false, token: 0 };
+const PUB_RECENT = "pub_recent";
+let pubTimer = null;
+const squash = s => String(s || "").trim().replace(/\s+/g, " ");
+const nameChips = (list, attr) => list.map(s => `<button class="fchip press" ${attr}="${esc(s)}">${esc(s)}</button>`).join("");
+
+function openSearch(mode, q) {
   haptic();
   S.ls = null;
+  S.srchMode = has29() && mode === "pub" ? "pub" : "sch";
+  if (q != null) srchQ[S.srchMode] = q;
   openSheet(`<div class="srch">
-    <div class="srch-box">${icon("search")}<input id="srch-in" type="search" enterkeyhint="search" autocomplete="off" placeholder="${esc(T.searchHint)}"></div>
-    <div id="srch-res"></div>
-    <div class="actions" style="margin-top:16px"><button class="btn ghost" data-copy-week="1">${icon(canShare() ? "send" : "copy")}${esc(canShare() ? T.shareWeek : T.copyWeek)}</button></div></div>`);
-  renderSearch();
+    ${has29() ? segHtml("srch-mode", [["sch", T.searchTab], ["pub", T.pubTab]], S.srchMode).replace('class="seg"', 'class="seg wide"') : ""}
+    <div class="srch-box">${icon("search")}<input id="srch-in" type="search" enterkeyhint="search" autocomplete="off"></div>
+    <div id="srch-res"></div></div>`);
+  placeSeg($("#srch-mode"));
+  applySearchMode();
   const mon = mondayOf(today());
-  Promise.all([0, 1, 2, 3].map(i => ensureWeek(addDays(mon, 7 * i)))).then(() => { if ($("#srch-res")) renderSearch(); });
-  setTimeout(() => { const i = $("#srch-in"); if (i) i.focus(); }, 380);
+  Promise.all([0, 1, 2, 3].map(i => ensureWeek(addDays(mon, 7 * i)))).then(() => { if ($("#srch-res")) applySearchMode(true); });
+  const typed = squash(srchQ[S.srchMode]);
+  if (S.srchMode === "pub" && typed.length >= 3 && (squash(pubState.q).toLowerCase() !== typed.toLowerCase() || pubState.error || !pubState.items.length)) runPubs(typed, true);
+  if (!typed) setTimeout(() => { const i = $("#srch-in"); if (i) i.focus(); }, 380);
+}
+
+// keepInput: перерисовать результаты, не трогая то, что пользователь уже набрал
+function applySearchMode(keepInput) {
+  const input = $("#srch-in");
+  if (!input) return;
+  input.placeholder = S.srchMode === "pub" ? T.pubPlaceholder : T.searchHint;
+  if (!keepInput) input.value = srchQ[S.srchMode];
+  if (S.srchMode === "pub") renderPubs(); else renderSearch();
+}
+
+function switchSearchMode(btn) {
+  if (btn.dataset.v === S.srchMode) return;
+  srchQ[S.srchMode] = $("#srch-in").value;
+  S.srchMode = btn.dataset.v;
+  $$("#srch-mode button").forEach(b => b.classList.toggle("on", b === btn));
+  placeSeg($("#srch-mode"));
+  haptic();
+  applySearchMode();
+}
+
+function onSearchInput(value) {
+  srchQ[S.srchMode] = value;
+  if (S.srchMode !== "pub") { renderSearch(); return; }
+  clearTimeout(pubTimer);
+  const q = squash(value);
+  if (q.length >= 3) pubTimer = setTimeout(() => runPubs(q, true), 700);
+  renderPubs();
 }
 
 function renderSearch() {
@@ -1685,17 +1762,17 @@ function renderSearch() {
   if (!box || !input) return;
   const q = input.value.trim().toLowerCase();
   const all = upcomingLessons();
+  const foot = `<div class="actions" style="margin-top:16px"><button class="btn ghost" data-copy-week="1">${icon(canShare() ? "send" : "copy")}${esc(canShare() ? T.shareWeek : T.copyWeek)}</button></div>`;
   if (!q) {
     const subjects = [...new Set(all.map(x => translateSubject(x.l.subject, L)))].sort((a, b) => a.localeCompare(b));
     const teachers = [...new Set(all.map(x => x.l.teacher).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-    const chips = list => list.map(s => `<button class="fchip press" data-schip="${esc(s)}">${esc(s)}</button>`).join("");
-    box.innerHTML = (subjects.length ? `<div class="section">${esc(T.searchSubjects)}</div><div class="chips-wrap">${chips(subjects)}</div>` : "") +
-      (teachers.length ? `<div class="section">${esc(T.searchTeachers)}</div><div class="chips-wrap">${chips(teachers)}</div>` : "") +
-      (!all.length ? `<div class="sk" style="height:60px"></div>` : "");
+    box.innerHTML = (subjects.length ? `<div class="section">${esc(T.searchSubjects)}</div><div class="chips-wrap">${nameChips(subjects, "data-schip")}</div>` : "") +
+      (teachers.length ? `<div class="section">${esc(T.searchTeachers)}</div><div class="chips-wrap">${nameChips(teachers, "data-schip")}</div>` : "") +
+      (!all.length ? `<div class="sk" style="height:60px"></div>` : "") + foot;
     return;
   }
   const hits = all.filter(({ l }) => [translateSubject(l.subject, L), l.subject, l.teacher, l.room, l.building].some(v => v && String(v).toLowerCase().includes(q)));
-  if (!hits.length) { box.innerHTML = `<div class="g-empty" style="padding:18px 4px">${esc(T.noResults)}</div>`; return; }
+  if (!hits.length) { box.innerHTML = `<div class="g-empty" style="padding:18px 4px">${esc(T.noResults)}</div>` + foot; return; }
   let prev = "";
   box.innerHTML = hits.slice(0, 40).map(({ d, l }) => {
     const key = iso(d);
@@ -1704,7 +1781,101 @@ function renderSearch() {
     const place = [l.room, l.building].filter(Boolean).join(", ");
     return head + `<button class="srow press" data-sgo="${key}"><span class="sx"><b>${esc(translateSubject(l.subject, L))}</b>
       <small>${esc(l.start)}–${esc(l.end)}${place ? " · " + esc(place) : ""}${l.teacher ? " · " + esc(l.teacher) : ""}</small></span>${icon("arrow")}</button>`;
-  }).join("");
+  }).join("") + foot;
+}
+
+// ---- научные работы преподавателя (OpenAlex; запрос выполняет приложение, версия 2.9+)
+
+async function runPubs(q, reset) {
+  const P = pubState, mine = ++P.token;
+  q = squash(q);
+  if (reset) Object.assign(P, { q, page: 1, items: [], total: 0, authors: 0, hasMore: false, error: false });
+  else P.page += 1;
+  P.loading = true;
+  if ($("#srch-res") && S.srchMode === "pub") renderPubs();
+  const r = await api(`pubs?q=${encodeURIComponent(P.q)}&sort=${P.sort}&page=${P.page}`, 70000);
+  if (mine !== P.token) return;   // пока ждали, запустили другой поиск
+  P.loading = false;
+  if (!r.ok) {
+    P.error = true;
+    if (!reset) P.page -= 1;
+  } else {
+    P.error = false;
+    const seen = new Set(P.items.map(w => w.id));
+    P.items = P.items.concat((r.items || []).filter(w => !seen.has(w.id)));
+    P.total = r.total || 0; P.authors = r.authors || 0; P.hasMore = !!r.hasMore;
+    if (reset && P.items.length) {
+      const recent = (store.get(PUB_RECENT) || []).filter(x => x.toLowerCase() !== P.q.toLowerCase());
+      store.set(PUB_RECENT, [P.q, ...recent].slice(0, 6));
+    }
+  }
+  if ($("#srch-res") && S.srchMode === "pub") renderPubs();
+}
+
+function pubLinks(name) {
+  const g = `https://scholar.google.com/scholar?q=${encodeURIComponent(`author:"${name}"`)}`;
+  const c = `https://cyberleninka.ru/search?q=${encodeURIComponent(name)}`;
+  return `<div class="pub-also"><span>${esc(T.pubAlso)}</span>
+    <button class="fchip press" data-purl="${esc(g)}" data-ptitle="Google Scholar">Google Scholar</button>
+    <button class="fchip press" data-purl="${esc(c)}" data-ptitle="КиберЛенинка">КиберЛенинка</button></div>`;
+}
+
+function pubCitation(w) {
+  const names = (w.authors || []).join(", ") + (w.authorsTotal > (w.authors || []).length ? " et al." : "");
+  const title = plainText(w.title).replace(/[.\s]+$/, "");
+  const vol = [w.volume ? `${w.volume}${w.issue ? `(${w.issue})` : ""}` : "", w.pages].filter(Boolean).join(", ");
+  const where = [plainText(w.source), vol].filter(Boolean).join(", ");
+  return [names, `(${w.year || "n.d."}).`, title + ".", where ? where + "." : "", w.doi || w.open || ""].filter(Boolean).join(" ");
+}
+
+function pubCard(w, i) {
+  const title = plainText(w.title) || "—";
+  const vol = [w.volume ? `${w.volume}${w.issue ? `(${w.issue})` : ""}` : "", w.pages].filter(Boolean).join(", ");
+  const src = [plainText(w.source), w.year || "", vol].filter(Boolean).join(" · ");
+  const authors = (w.authors || []).join(", ") + (w.authorsTotal > (w.authors || []).length ? " " + T.pubEtAl : "");
+  return `<div class="pub">
+    <div class="pub-top"><b>${esc(title)}</b>${w.tsue ? `<span class="pub-tag">${esc(T.pubTsue)}</span>` : ""}</div>
+    ${src ? `<small class="pub-src">${esc(src)}</small>` : ""}
+    ${authors ? `<small class="pub-au">${esc(authors)}</small>` : ""}
+    <div class="pub-acts">
+      ${w.cited ? `<span class="pub-cit">${esc(T.pubCited(w.cited))}</span>` : ""}
+      ${w.open ? `<button class="pub-btn press" data-purl="${esc(w.open)}" data-ptitle="${esc(title)}">${icon("external")}${esc(T.pubOpen)}</button>` : ""}
+      <button class="pub-btn press" data-pcite="${i}">${icon("copy")}${esc(T.pubCite)}</button>
+    </div></div>`;
+}
+
+function renderPubs() {
+  const box = $("#srch-res"), input = $("#srch-in");
+  if (!box || !input) return;
+  const P = pubState, typed = squash(input.value);
+  const note = `<p class="pub-note">${esc(T.pubNote)}</p>`;
+  if (typed.length < 3) {
+    const recent = store.get(PUB_RECENT) || [];
+    const teachers = [...new Set(upcomingLessons().map(x => x.l.teacher).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    box.innerHTML = `<p class="pub-hint">${esc(T.pubHint)}</p>` +
+      (recent.length ? `<div class="section">${esc(T.pubRecent)}</div><div class="chips-wrap">${nameChips(recent, "data-pubq")}</div>` : "") +
+      (teachers.length ? `<div class="section">${esc(T.searchTeachers)}</div><div class="chips-wrap">${nameChips(teachers, "data-pubq")}</div>` : "") + note;
+    return;
+  }
+  const skeleton = `<div class="sk" style="height:92px"></div><div class="sk" style="height:92px;opacity:.6"></div>`;
+  if (typed.toLowerCase() !== squash(P.q).toLowerCase()) { box.innerHTML = skeleton; return; }   // поиск вот-вот начнётся
+  if (P.loading && !P.items.length) { box.innerHTML = skeleton; return; }
+  if (P.error && !P.items.length) {
+    box.innerHTML = `<div class="g-empty" style="padding:14px 4px">${esc(T.networkError)} · <button class="link" data-pub-retry="1">${esc(T.retry)}</button></div>` + pubLinks(typed);
+    return;
+  }
+  if (!P.items.length) {
+    box.innerHTML = `<div class="g-empty" style="padding:14px 4px 4px">${esc(T.pubNone)}</div><p class="pub-note">${esc(T.pubNoneHint)}</p>` + pubLinks(typed);
+    return;
+  }
+  const sort = [["year", T.pubSortNew], ["cited", T.pubSortCited]].map(([v, label]) =>
+    `<button class="fchip press ${P.sort === v ? "on" : ""}" data-pub-sort="${v}">${esc(label)}</button>`).join("");
+  box.innerHTML = `<div class="pub-head"><span>${esc(T.pubFound(P.total, P.authors))}</span></div>
+    <div class="chips-wrap" style="margin-bottom:10px">${sort}</div>` +
+    P.items.map(pubCard).join("") +
+    (P.loading ? `<div class="sk" style="height:60px"></div>` : P.error ? `<div class="g-empty" style="padding:6px 4px">${esc(T.networkError)} · <button class="link" data-pub-more="1">${esc(T.retry)}</button></div>`
+      : P.hasMore ? `<div class="actions" style="margin-top:6px"><button class="btn ghost" data-pub-more="1">${esc(T.pubMore)}</button></div>` : "") +
+    note + pubLinks(typed);
 }
 
 // ------------------------------------------------------------------ напоминания
@@ -1748,8 +1919,13 @@ function bindEvents() {
     if (les && les.dataset.date) openLesson(les);
   });
   $("#go-today").addEventListener("click", () => goToDate(today()));
-  $("#go-search").addEventListener("click", openSearch);
-  $("#sheet").addEventListener("input", e => { if (e.target.id === "srch-in") renderSearch(); });
+  $("#go-search").addEventListener("click", () => openSearch("sch"));
+  $("#sheet").addEventListener("input", e => { if (e.target.id === "srch-in") onSearchInput(e.target.value); });
+  $("#sheet").addEventListener("keydown", e => {
+    if (e.key !== "Enter" || e.target.id !== "srch-in") return;
+    e.target.blur();   // убрать клавиатуру
+    if (S.srchMode === "pub" && squash(e.target.value).length >= 3) { clearTimeout(pubTimer); runPubs(squash(e.target.value), true); }
+  });
 
   $("#tasks-scroll").addEventListener("click", e => {
     const f = e.target.closest("[data-filter]");
