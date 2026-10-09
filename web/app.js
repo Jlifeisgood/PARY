@@ -24,7 +24,14 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&a
 const store = {
   get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* нет места */ } },
-  clear() { try { localStorage.clear(); } catch (e) { } },
+  // keepPersonal: при принудительном выходе (пароль изменился) личные заметки и отметки сохраняются; при выходе по кнопке — стираются
+  clear(keepPersonal) {
+    try {
+      const keep = keepPersonal ? ["theme", "notes", "taskdone"].map(k => [k, localStorage.getItem(k)]) : [];
+      localStorage.clear();
+      keep.forEach(([k, v]) => { if (v !== null) localStorage.setItem(k, v); });
+    } catch (e) { }
+  },
 };
 const haptic = () => { try { A && A.haptic(); } catch (e) { } };
 
@@ -87,6 +94,10 @@ const P = {
   cap: '<path d="M12 4 2 9l10 5 10-5-10-5z"/><path d="M6 11.5V16c0 1.1 2.7 3 6 3s6-1.9 6-3v-4.5"/>',
   send: '<path d="M22 3 11 14"/><path d="M22 3 15 21l-4-7-7-4z"/>',
   external: '<path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/>',
+  note: '<path d="M4 20h4L19.5 8.5a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
+  copy: '<rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15V6.5A2.5 2.5 0 0 1 7.5 4H16"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
 };
 const icon = name => `<svg class="i" viewBox="0 0 24 24">${P[name]}</svg>`;
 
@@ -122,7 +133,7 @@ function handleError(r, silent) {
   if (!r || r.ok) return;
   if (r.code === "login_failed" || r.code === "not_logged_in") {
     try { A && A.logout(); } catch (e) { }
-    store.clear();
+    store.clear(true);
     showLogin(r.code === "login_failed" ? T.loginFailed : "");
     return;
   }
@@ -188,37 +199,71 @@ const LANGS_SHORT = [["uz", "UZ"], ["ru", "RU"], ["en", "EN"]];
 // ------------------------------------------------------------------ заставка
 
 const APP_NAME = "Пары";
-const FLIP_STEP = 0.3, FLIP_DUR = 1.15, CURL_SEGS = 11;
+const PEEL_STEP = 0.46, PEEL_DUR = 0.88, PEEL_START = 0.4, PEELS = 3;
+const PEEL_END = PEEL_START + (PEELS - 1) * PEEL_STEP + PEEL_DUR;   // момент, когда открылся сегодняшний лист
+
+/**
+ * Отрыв листа календаря «за уголок»: сгиб идёт от левого нижнего угла к правому верхнему.
+ * Геометрия точная (2D): видимая изнанка листа — это зеркальное отражение оторванной части относительно линии сгиба,
+ * а отражение квадрата относительно диагональной линии — тот же квадрат, сдвинутый на (k, -k), k = s·(2t−1).
+ * Поэтому достаточно двигать «изнанку» по диагонали и обрезать лицевую сторону и изнанку по линии сгиба.
+ * Последняя точка касания — правый верхний угол; после неё лист улетает.
+ */
+function peelSheet(el, delay) {
+  const timing = { duration: PEEL_DUR * 1000, delay: delay * 1000, fill: "both", easing: "cubic-bezier(.5, 0, .85, .62)" };
+  // лицевая сторона: остаётся только часть за линией сгиба (5 вершин — чтобы форма менялась без скачков)
+  el.querySelector(".pf").animate({ clipPath: [
+    "polygon(0% 100%, 0% 0%, 100% 0%, 100% 100%, 0% 100%)",
+    "polygon(0% 0%, 0% 0%, 100% 0%, 100% 100%, 100% 100%)",
+    "polygon(100% 0%, 100% 0%, 100% 0%, 100% 0%, 100% 0%)"] }, timing);
+  // изнанка: едет по диагонали и обрезается той же линией сгиба
+  el.querySelector(".pb").animate({
+    transform: ["translate(-100%, 100%)", "translate(0%, 0%)", "translate(100%, -100%)"],
+    clipPath: [
+      "polygon(100% 0%, 100% 0%, 100% 0%, 100% 0%, 100% 0%)",
+      "polygon(0% 0%, 0% 0%, 100% 0%, 100% 100%, 100% 100%)",
+      "polygon(0% 100%, 0% 0%, 100% 0%, 100% 100%, 0% 100%)"] }, timing);
+  // блик и тень на сгибе (на изнанке) и тень от сгиба на следующем листе — обе полосы идут вместе с линией сгиба
+  el.querySelector(".pbs").animate({ transform: ["translate(16.667%, -16.667%)", "translate(-16.667%, 16.667%)"] }, timing);
+  el.querySelector(".prs").animate({ transform: ["translate(-16.667%, 16.667%)", "translate(16.667%, -16.667%)"] }, timing);
+  // лист оторвался: разворачивается вокруг последней точки касания и улетает
+  el.querySelector(".pbw").animate([
+    { transform: "none", opacity: 1 },
+    { transform: "translate(34%, -46%) rotate(20deg) scale(.9)", opacity: 0 }],
+  { duration: 420, delay: (delay + PEEL_DUR) * 1000 - 40, fill: "both", easing: "cubic-bezier(.3, .5, .4, 1)" });
+}
+
 function startSplash() {
-  // календарь, у которого страницы отрываются к сегодняшнему дню
+  // календарь, у которого листы отрываются до сегодняшнего дня
   const now = nowT(), mon = T.months[now.getUTCMonth()].slice(0, 3).toUpperCase();
   const face = d => `<div class="hd">${esc(mon)}</div><div class="bd"><span>${esc(T.daysShort[dow(d)])}</span><b>${d.getUTCDate()}</b></div>`;
-  // отрывающийся лист = вложенные полоски (.seg), каждая гнётся чуть сильнее — получается изгиб бумаги
-  const curl = d => {
-    let html = "";
-    for (let s = CURL_SEGS - 1; s >= 0; s--) html = `<div class="cs-seg" style="--i:${s}"><div class="cs-clip"><div class="cs-face">${face(d)}</div></div>${html}</div>`;
-    return html;
-  };
   let sheets = "";
-  for (let i = 0; i < 4; i++) {
-    const d = addDays(dayStart(now), i - 3), final = i === 3;
-    sheets += final
+  for (let i = 0; i <= PEELS; i++) {
+    const d = addDays(dayStart(now), i - PEELS);
+    sheets += i === PEELS
       ? `<div class="cal-sheet final" style="z-index:1">${face(d)}</div>`
-      : `<div class="cal-sheet flip" style="z-index:${4 - i};--d:${(i * FLIP_STEP).toFixed(2)}s;--sn:${CURL_SEGS}">${curl(d)}</div>`;
+      : `<div class="cal-sheet peel" style="--z:${PEELS + 1 - i}"><div class="pf">${face(d)}</div>
+          <div class="pr"><i class="prs"></i></div><div class="pbw"><div class="pb"><i class="pbs"></i></div></div></div>`;
   }
   $("#sp-icon").innerHTML = `<div class="cal"><div class="cal-hang"><i></i><i></i></div><div class="cal-stack">${sheets}</div></div>`;
-  // размеры полосок в px (нужны для клипа), от реальной высоты листа
-  const stack = $("#sp-icon .cal-stack");
-  const h = stack ? stack.clientHeight : 117;
-  $$("#sp-icon .cal-sheet.flip").forEach(el => { el.style.setProperty("--sheeth", h + "px"); el.style.setProperty("--segh", (h / CURL_SEGS) + "px"); });
 
-  const nameAt = 3 * FLIP_STEP + FLIP_DUR - 0.15;   // имя проявляется, когда долистали до сегодня
+  const still = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const canAnimate = !still && typeof Element.prototype.animate === "function" && window.CSS && CSS.supports("clip-path", "polygon(0 0, 100% 0, 0 100%)");
+  const peels = $$("#sp-icon .cal-sheet.peel");
+  if (canAnimate) {
+    try { peels.forEach((el, i) => peelSheet(el, PEEL_START + i * PEEL_STEP)); }
+    catch (e) { peels.forEach(el => el.remove()); }
+  } else peels.forEach(el => el.remove());   // без анимации — сразу сегодняшний лист
+
+  const nameAt = canAnimate ? PEEL_END - 0.2 : 0.3;   // имя проявляется, когда долистали до сегодня
+  const fin = $("#sp-icon .cal-sheet.final .bd b");
+  if (fin) fin.style.animationDelay = (nameAt - 0.12).toFixed(2) + "s";
   $("#sp-name").innerHTML = [...APP_NAME].map((c, i) => `<span style="animation-delay:${(nameAt + i * 0.09).toFixed(2)}s">${esc(c)}</span>`).join("");
   $("#sp-tag").style.animationDelay = (nameAt + APP_NAME.length * 0.09 + 0.12).toFixed(2) + "s";
   $("#sp-tag").textContent = T.tagline;
   applyBars(true);
 }
-const SPLASH_MS = Math.round((3 * FLIP_STEP + FLIP_DUR + APP_NAME.length * 0.09 + 0.5) * 1000);
+const SPLASH_MS = Math.round((PEEL_END + APP_NAME.length * 0.09 + 0.55) * 1000);
 
 async function endSplash() {
   const sp = $("#splash");
@@ -310,6 +355,8 @@ function showMain() {
   $("#nav-i-tasks").innerHTML = icon("tasks");
   $("#nav-i-grades").innerHTML = icon("grades");
   $("#nav-i-resources").innerHTML = icon("grid");
+  $("#go-search").innerHTML = icon("search");
+  pruneNotes();
   setLang(L, false);
   renderAvatar();
   setTab("schedule", true);
@@ -377,6 +424,7 @@ function renderHeader(anim, date) {
     sub = sem ? sem.name : (S.me && S.me.semesterName) || "";
   }
   // «Сегодня» — только в расписании и только если открыт другой день; стрелка смотрит в сторону сегодня
+  $("#go-search").hidden = S.tab !== "schedule";
   const gt = $("#go-today"), away = S.tab === "schedule" && iso(d) !== iso(today());
   if (away) {
     const back = d > today();
@@ -523,8 +571,71 @@ function progress(l) {
 
 function kindLabel(l) { return l.kindName || T.kind[l.kind] || T.kind.other; }
 
-function lessonHtml(l, st, i, anim) {
+// ---- личные заметки к парам (хранятся только на телефоне)
+const NOTES = store.get("notes") || {};
+const noteKey = (date, l) => `${date}|${l.start}|${l.subject}`;
+const saveNotes = () => store.set("notes", NOTES);
+function pruneNotes() {
+  const cut = iso(addDays(today(), -120));
+  let changed = false;
+  for (const k of Object.keys(NOTES)) if (k.slice(0, 10) < cut) { delete NOTES[k]; changed = true; }
+  if (changed) saveNotes();
+}
+
+// «Поделиться» есть в приложении с версии 2.8; на более старых — копирование в буфер
+const canShare = () => { try { return !!(window.Android && A.shareText); } catch (e) { return false; } };
+function sendText(text) {
+  if (canShare()) { haptic(); try { A.shareText(text); return; } catch (e) { } }
+  copyText(text);
+}
+
+async function copyText(text) {
+  let ok = false;
+  try { if (A && A.copyText) { A.copyText(text); ok = true; } } catch (e) { }
+  if (!ok) { try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); ok = true; } } catch (e) { } }
+  if (!ok) {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.style.cssText = "position:fixed;opacity:0;left:-9999px;top:0";
+      document.body.appendChild(ta); ta.select(); ok = document.execCommand("copy"); ta.remove();
+    } catch (e) { }
+  }
+  haptic();
+  if (ok) { toast(T.copied); return true; }
+  // запасной путь: показать текст, чтобы его можно было выделить и скопировать вручную
+  openSheet(`<div class="ls"><p class="cp-hint">${esc(T.copyFail)}</p>
+    <textarea id="note-in" readonly rows="9">${esc(text)}</textarea>
+    <div class="actions" style="margin-top:12px"><button class="btn ghost" data-act="close">OK</button></div></div>`);
+  setTimeout(() => { const t = $("#note-in"); if (t) { t.focus(); t.select(); } }, 380);
+  return false;
+}
+
+function lessonLine(l, date) {
+  const place = [l.room, l.building].filter(Boolean).join(", ");
+  const note = NOTES[noteKey(date, l)];
+  return `${l.start}–${l.end}  ${translateSubject(l.subject, L)} (${kindLabel(l)})` + (place ? ` · ${place}` : "") + (l.teacher ? ` · ${l.teacher}` : "") + (note ? `\n    ✎ ${note}` : "");
+}
+
+function dayText(dateIso) {
+  const d = parseIso(dateIso), list = lessonsOn(d);
+  const head = `${T.days[dow(d)]}, ${fmtDate(d)}` + (S.me && S.me.group ? ` · ${S.me.group}` : "");
+  if (list === null) return null;
+  return list.length ? head + "\n" + list.map(l => lessonLine(l, dateIso)).join("\n") : head + "\n" + T.noPairs;
+}
+
+function weekText(monday) {
+  const parts = [];
+  for (let i = 0; i < 7; i++) {
+    const di = iso(addDays(monday, i)), list = lessonsOn(addDays(monday, i));
+    if (list === null) return null;
+    if (list.length) parts.push(dayText(di));
+  }
+  return parts.join("\n\n") || T.noPairs;
+}
+
+function lessonHtml(l, st, i, anim, date, idx, edge) {
   const kind = T.kind[l.kind] ? l.kind : "other";
+  const note = NOTES[noteKey(date, l)];
   let fill = "", extra = "";
   if (st === "now") {
     const p = (progress(l) / 100).toFixed(4);
@@ -538,12 +649,14 @@ function lessonHtml(l, st, i, anim) {
     l.room && `<span>${icon("pin")}${esc(l.room)}${l.building ? ", " + esc(l.building) : ""}</span>`,
     l.teacher && `<span>${icon("user")}${esc(l.teacher)}</span>`,
   ].filter(Boolean).join("");
-  return `<div class="lesson k-${kind} ${st}${anim ? " anim" : ""}" style="--i:${i}" data-start="${esc(l.start)}" data-end="${esc(l.end)}">${fill}
+  // лента времени: время слева, линия с точкой, карточка справа (edge: first / last — где у линии начало и конец)
+  return `<div class="lesson k-${kind} ${st}${edge ? " " + edge : ""}${anim ? " anim" : ""}" style="--i:${i}" data-start="${esc(l.start)}" data-end="${esc(l.end)}" data-date="${esc(date)}" data-idx="${idx}">
     <div class="l-time"><b>${esc(l.start)}</b><span>${esc(l.end)}</span></div>
-    <div class="l-body">
+    <div class="l-rail"><i></i></div>
+    <div class="l-card">${fill}
       <div class="l-top"><span class="chip">${esc(kindLabel(l))}</span>${l.period ? `<span class="l-num">${esc(T.pair(l.period))}</span>` : ""}</div>
       <div class="l-subj">${esc(translateSubject(l.subject, L))}</div>
-      ${meta ? `<div class="l-meta">${meta}</div>` : ""}${extra}
+      ${meta ? `<div class="l-meta">${meta}</div>` : ""}${note ? `<div class="l-note">${icon("note")}<span>${esc(note)}</span></div>` : ""}${extra}
     </div></div>`;
 }
 
@@ -607,7 +720,8 @@ function pageHtml(date, anim) {
   const list = lessonsOn(date);
   if (!list.length) return html + emptyHtml(date, anim);
   // сводка дня: сколько пар и с какого по какое время
-  html += `<div class="day-sum${anim ? " anim" : ""}">${icon("clock")}<b>${esc(T.pairsCount(list.length))}</b><span>${esc(list[0].start)}–${esc(list[list.length - 1].end)}</span></div>`;
+  html += `<div class="day-sum${anim ? " anim" : ""}">${icon("clock")}<b>${esc(T.pairsCount(list.length))}</b><span>${esc(list[0].start)}–${esc(list[list.length - 1].end)}</span>
+    <button class="sum-act press" data-copy-day="${iso(date)}" aria-label="${esc(canShare() ? T.share : T.copy)}">${icon(canShare() ? "send" : "copy")}</button></div>`;
 
   const states = list.map(l => lessonState(l, date));
   const nowIdx = states.indexOf("now");
@@ -620,7 +734,7 @@ function pageHtml(date, anim) {
     }
     let st = states[i];
     if (st === "future") st = (i === nextIdx && nowIdx < 0) ? "next" : "";
-    html += lessonHtml(l, st, i, anim);
+    html += lessonHtml(l, st, i, anim, iso(date), i, [i === 0 ? "first" : "", i === list.length - 1 ? "last" : ""].filter(Boolean).join(" "));
     prevEnd = mins(l.end);
   });
   if (iso(date) === iso(today()) && states.every(s => s === "past")) {
@@ -884,7 +998,35 @@ async function refreshAll() {
 
 // ------------------------------------------------------------------ задания
 
+// личные отметки «сделано» (HEMIS их не знает) — только на телефоне
+const TASKDONE = store.get("taskdone") || {};
+const taskKey = t => String(t.id != null ? t.id : t.name);
 function taskState(t) {
+  const s = taskStateRaw(t);
+  return s !== "done" && TASKDONE[taskKey(t)] ? "done" : s;
+}
+
+function taskText(t) {
+  const d = t.deadline ? fromEpoch(t.deadline) : null;
+  return [translateSubject(t.subject, L), t.name, d ? `${T.deadline}: ${fmtDate(d)}, ${hhmm(d)}` : ""].filter(Boolean).join("\n");
+}
+
+function taskAction(btn) {
+  const card = btn.closest(".task"), t = S.tasks && S.tasks.items && S.tasks.items[+card.dataset.idx];
+  if (!t) return;
+  if (btn.dataset.taskAct === "copy") { sendText(taskText(t)); return; }
+  const k = taskKey(t);
+  if (TASKDONE[k]) delete TASKDONE[k]; else TASKDONE[k] = 1;
+  store.set("taskdone", TASKDONE);
+  haptic();
+  S.openTask = null;
+  renderTasks(false);
+  updateBadge();
+  renderHeader(false);
+  if (TASKDONE[k] && S.taskFilter === "active") toast(T.movedToDone);
+}
+
+function taskStateRaw(t) {
   const graded = t.grade !== null && t.grade !== undefined && t.grade !== "";
   const doneText = /baholan|tekshiril|yuborilgan|topshirilgan|qabul|оцен|отправ|сдан|провер|принят|graded|submitted|checked|marked|accepted|done|complete/i;
   if (graded || doneText.test(t.status || "")) return "done";
@@ -945,11 +1087,15 @@ function taskHtml(t, idx, i, anim) {
     [T.attempts, t.attemptLimit ? `${t.attempts || 0} / ${t.attemptLimit}` : ""],
   ].filter(([, v]) => v !== null && v !== undefined && v !== "").map(([k, v]) => `<div class="kv"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join("");
   const comment = plainText(t.comment);
+  const mine = st === "done" && taskStateRaw(t) !== "done";   // отмечено самим студентом, а не HEMIS
+  const acts = `<div class="tk-acts">
+    ${taskStateRaw(t) !== "done" ? `<button class="tk-act press${mine ? " on" : ""}" data-task-act="done">${icon("check")}${esc(mine ? T.unmarkDone : T.markDone)}</button>` : ""}
+    <button class="tk-act press" data-task-act="copy">${icon(canShare() ? "send" : "copy")}${esc(canShare() ? T.share : T.copy)}</button></div>`;
   return `<div class="task st-${st} ${dl.urgency || ""}${anim ? " anim" : ""}${S.openTask === idx ? " open" : ""}" style="--i:${i}" data-idx="${idx}">
     <div class="tk-top"><span class="tk-subj">${esc(translateSubject(t.subject, L))}</span>${score}</div>
     <div class="tk-name">${esc(t.name)}</div>
-    <div class="tk-row"><span class="pill ${dl.cls}">${icon(st === "done" ? "check" : "clock")}${esc(dl.text)}</span>${t.status ? `<span class="pill">${esc(t.status)}</span>` : ""}</div>
-    <div class="tk-more"><div><div class="tk-det">${kv}${comment ? `<div class="tk-comment">${esc(comment)}</div>` : ""}${files}</div></div></div>
+    <div class="tk-row"><span class="pill ${dl.cls}">${icon(st === "done" ? "check" : "clock")}${esc(dl.text)}</span>${mine ? `<span class="pill green">${esc(T.markedByYou)}</span>` : t.status ? `<span class="pill">${esc(t.status)}</span>` : ""}</div>
+    <div class="tk-more"><div><div class="tk-det">${kv}${comment ? `<div class="tk-comment">${esc(comment)}</div>` : ""}${files}${acts}</div></div></div>
   </div>`;
 }
 
@@ -1160,6 +1306,53 @@ function toggleSubject(card) {
   card.classList.toggle("open", open);
 }
 
+// «Сколько нужно набрать ещё»: если баллы за часть контролей уже есть, а до 100 ещё не хватает,
+// показывает минимум для оценок 3 / 4 / 5 (пороги 55 / 71 / 86 — те же, что у цвета колец)
+function forecastHtml(s) {
+  const ex = (s.exams || []).filter(e => num(e.grade) !== null && num(e.max) !== null);
+  if (!ex.length) return "";
+  const got = ex.reduce((a, e) => a + num(e.grade), 0), used = ex.reduce((a, e) => a + num(e.max), 0);
+  const rem = Math.round(100 - used);
+  if (rem < 5) return "";   // всё уже оценено
+  const chips = [[3, 55], [4, 71], [5, 86]].map(([g, th]) => {
+    const need = Math.ceil(th - got);
+    if (need <= 0) return `<b class="fc-ok">${g} ✓</b>`;
+    if (need > rem) return `<b class="fc-no">${g} —</b>`;
+    return `<b class="r${g}">${g}: ≥${need}</b>`;
+  }).join("");
+  return `<div class="fc"><span>${esc(T.forecast(rem))}</span>${chips}</div>`;
+}
+
+// из расписания → предмет в «Оценках» (раскрывается и подсвечивается)
+const subjNorm = s => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+function findSubjectIndex(name) {
+  const subs = (S.grades && S.grades.subjects) || [];
+  const a = subjNorm(translateSubject(name, L));
+  if (!a) return -1;
+  let idx = subs.findIndex(s => subjNorm(translateSubject(s.name, L)) === a);
+  if (idx < 0) idx = subs.findIndex(s => { const b = subjNorm(translateSubject(s.name, L)); return b && Math.min(a.length, b.length) >= 5 && (a.includes(b) || b.includes(a)); });
+  return idx;
+}
+
+async function goToSubject(name) {
+  closeSheet();
+  if (S.gradesSem && S.me && String(S.gradesSem) !== String(S.me.semesterCode)) S.gradesSem = null;
+  if (!S.grades || !S.grades.subjects || (S.me && S.grades.semester && String(S.grades.semester) !== String(S.me.semesterCode))) {
+    toast(T.loading);
+    await loadGrades(false, S.me && S.me.semesterCode);
+  }
+  const idx = findSubjectIndex(name);
+  if (idx < 0) { toast(T.subjectNotFound); return; }
+  S.openSubject = null;
+  setTab("grades");
+  await sleep(450);   // дать вкладке отрисоваться
+  const card = $$("#grades-scroll .grade")[idx];
+  if (!card) return;
+  card.scrollIntoView({ block: "center", behavior: "smooth" });
+  card.classList.remove("flash"); void card.offsetWidth; card.classList.add("flash");
+  if (card.classList.contains("expandable") && !card.classList.contains("open")) toggleSubject(card);
+}
+
 function gradeHtml(s, i) {
   const p = percentOf(s.overall);
   const exams = (s.exams || []).map(e => {
@@ -1178,7 +1371,7 @@ function gradeHtml(s, i) {
       <div class="g-name"><b>${esc(translateSubject(s.name, L))}</b><small>${esc(info)}</small>${study ? `<div class="g-att">${attChip(id)}</div>` : ""}</div>
       ${mark && num(mark) !== null && num(mark) <= 5 ? `<div class="g-mark">${mark}</div>` : ""}
       ${study ? `<span class="g-chev">${icon("down")}</span>` : ""}
-    </div>${exams ? `<div class="bars">${exams}</div>` : ""}
+    </div>${exams ? `<div class="bars">${exams}</div>` : ""}${forecastHtml(s)}
     ${study ? `<div class="g-more"><div><div class="g-det">${open ? subjectDetails(id) : ""}</div></div></div>` : ""}</div>`;
 }
 
@@ -1309,6 +1502,17 @@ function openSettings() {
 }
 
 function onSheetClick(e) {
+  const lsb = e.target.closest("[data-ls]");
+  if (lsb) { lessonAction(lsb.dataset.ls); return; }
+  const sgo = e.target.closest("[data-sgo]");
+  if (sgo) { haptic(); closeSheet(); goToDate(parseIso(sgo.dataset.sgo)); return; }
+  const chip = e.target.closest("[data-schip]");
+  if (chip) { const i = $("#srch-in"); if (i) { i.value = chip.dataset.schip; renderSearch(); haptic(); } return; }
+  if (e.target.closest("[data-copy-week]")) {
+    const t = weekText(mondayOf(S.sel));
+    if (t === null) toast(T.networkError); else sendText(t);
+    return;
+  }
   const langBtn = e.target.closest("#set-lang button[data-v]");
   if (langBtn && langBtn.dataset.v !== L) {
     setLang(langBtn.dataset.v, true);
@@ -1370,6 +1574,136 @@ function refreshSettings() {
   if (sheetOpen() && $("#set-lang")) setSheet(settingsHtml());
 }
 
+// ------------------------------------------------------------------ карточка пары (нажатие на пару)
+
+function openLesson(el) {
+  const date = el.dataset.date, list = lessonsOn(parseIso(date));
+  const l = list && (list[+el.dataset.idx] && list[+el.dataset.idx].start === el.dataset.start ? list[+el.dataset.idx] : list.find(x => x.start === el.dataset.start));
+  if (!l) return;
+  S.ls = { date, l };
+  haptic();
+  openSheet(lessonSheetHtml());
+}
+
+function lessonSheetHtml() {
+  const { date, l } = S.ls, d = parseIso(date), note = NOTES[noteKey(date, l)];
+  const kind = T.kind[l.kind] ? l.kind : "other";
+  const place = [l.room, l.building].filter(Boolean).join(", ");
+  return `<div class="ls k-${kind}">
+    <div class="l-top"><span class="chip">${esc(kindLabel(l))}</span>${l.period ? `<span class="l-num">${esc(T.pair(l.period))}</span>` : ""}</div>
+    <h3>${esc(translateSubject(l.subject, L))}</h3>
+    <div class="ls-meta">
+      <span>${icon("calendar")}${esc(relDay(d))}, ${esc(fmtDate(d))}</span>
+      <span>${icon("clock")}${esc(l.start)}–${esc(l.end)}</span>
+      ${place ? `<span>${icon("pin")}${esc(place)}</span>` : ""}
+      ${l.teacher ? `<span>${icon("user")}${esc(l.teacher)}</span>` : ""}
+    </div>
+    ${note ? `<div class="ls-note">${icon("note")}<p>${esc(note)}</p></div>` : ""}
+    <div class="ls-acts">
+      <button class="ls-btn press" data-ls="note">${icon("note")}<span>${esc(note ? T.editNote : T.addNote)}</span></button>
+      <button class="ls-btn press" data-ls="copy">${icon(canShare() ? "send" : "copy")}<span>${esc(canShare() ? T.share : T.copy)}</span></button>
+      <button class="ls-btn press" data-ls="subject">${icon("grades")}<span>${esc(T.openSubject)}</span></button>
+      <button class="ls-btn press" data-ls="next">${icon("calendar")}<span>${esc(T.nextSame)}</span></button>
+    </div></div>`;
+}
+
+async function lessonAction(act) {
+  const ls = S.ls;
+  if (!ls) return;
+  const key = noteKey(ls.date, ls.l);
+  switch (act) {
+    case "note":
+      setSheet(`<div class="ls"><h3>${esc(translateSubject(ls.l.subject, L))}</h3>
+        <textarea id="note-in" maxlength="300" rows="4" placeholder="${esc(T.noteHint)}">${esc(NOTES[key] || "")}</textarea>
+        <div class="actions" style="margin-top:12px"><button class="btn" data-ls="note-save">${esc(T.save)}</button>
+        ${NOTES[key] ? `<button class="btn danger" data-ls="note-del">${icon("trash")}${esc(T.del)}</button>` : ""}
+        <button class="btn ghost" data-ls="note-back">${esc(T.cancel)}</button></div></div>`);
+      setTimeout(() => { const t = $("#note-in"); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }, 380);
+      break;
+    case "note-save": {
+      const v = ($("#note-in").value || "").trim();
+      if (v) NOTES[key] = v; else delete NOTES[key];
+      saveNotes(); haptic();
+      renderPager(false, true);
+      setSheet(lessonSheetHtml());
+      break;
+    }
+    case "note-del":
+      delete NOTES[key]; saveNotes(); haptic();
+      renderPager(false, true);
+      setSheet(lessonSheetHtml());
+      break;
+    case "note-back": setSheet(lessonSheetHtml()); break;
+    case "copy": {
+      const d = parseIso(ls.date);
+      sendText(`${T.days[dow(d)]}, ${fmtDate(d)}\n${lessonLine(ls.l, ls.date)}`);
+      break;
+    }
+    case "subject": goToSubject(ls.l.subject); break;
+    case "next": {
+      const from = parseIso(ls.date), monday = mondayOf(from);
+      await Promise.all([1, 2, 3, 4, 5].map(i => ensureWeek(addDays(monday, 7 * i))));
+      for (let i = 1; i <= 42; i++) {
+        const d = addDays(from, i), list = lessonsOn(d);
+        if (list && list.some(x => x.subject === ls.l.subject)) { closeSheet(); goToDate(d); return; }
+      }
+      toast(T.noNext);
+      break;
+    }
+  }
+}
+
+// ------------------------------------------------------------------ поиск по расписанию (ближайшие 4 недели)
+
+function upcomingLessons() {
+  const out = [], t0 = today();
+  for (let i = 0; i < 28; i++) {
+    const d = addDays(t0, i), list = lessonsOn(d);
+    if (list) list.forEach(l => out.push({ d, l }));
+  }
+  return out;
+}
+
+function openSearch() {
+  haptic();
+  S.ls = null;
+  openSheet(`<div class="srch">
+    <div class="srch-box">${icon("search")}<input id="srch-in" type="search" enterkeyhint="search" autocomplete="off" placeholder="${esc(T.searchHint)}"></div>
+    <div id="srch-res"></div>
+    <div class="actions" style="margin-top:16px"><button class="btn ghost" data-copy-week="1">${icon(canShare() ? "send" : "copy")}${esc(canShare() ? T.shareWeek : T.copyWeek)}</button></div></div>`);
+  renderSearch();
+  const mon = mondayOf(today());
+  Promise.all([0, 1, 2, 3].map(i => ensureWeek(addDays(mon, 7 * i)))).then(() => { if ($("#srch-res")) renderSearch(); });
+  setTimeout(() => { const i = $("#srch-in"); if (i) i.focus(); }, 380);
+}
+
+function renderSearch() {
+  const box = $("#srch-res"), input = $("#srch-in");
+  if (!box || !input) return;
+  const q = input.value.trim().toLowerCase();
+  const all = upcomingLessons();
+  if (!q) {
+    const subjects = [...new Set(all.map(x => translateSubject(x.l.subject, L)))].sort((a, b) => a.localeCompare(b));
+    const teachers = [...new Set(all.map(x => x.l.teacher).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const chips = list => list.map(s => `<button class="fchip press" data-schip="${esc(s)}">${esc(s)}</button>`).join("");
+    box.innerHTML = (subjects.length ? `<div class="section">${esc(T.searchSubjects)}</div><div class="chips-wrap">${chips(subjects)}</div>` : "") +
+      (teachers.length ? `<div class="section">${esc(T.searchTeachers)}</div><div class="chips-wrap">${chips(teachers)}</div>` : "") +
+      (!all.length ? `<div class="sk" style="height:60px"></div>` : "");
+    return;
+  }
+  const hits = all.filter(({ l }) => [translateSubject(l.subject, L), l.subject, l.teacher, l.room, l.building].some(v => v && String(v).toLowerCase().includes(q)));
+  if (!hits.length) { box.innerHTML = `<div class="g-empty" style="padding:18px 4px">${esc(T.noResults)}</div>`; return; }
+  let prev = "";
+  box.innerHTML = hits.slice(0, 40).map(({ d, l }) => {
+    const key = iso(d);
+    const head = key !== prev ? `<div class="section">${esc(relDay(d))}, ${esc(fmtDate(d))}</div>` : "";
+    prev = key;
+    const place = [l.room, l.building].filter(Boolean).join(", ");
+    return head + `<button class="srow press" data-sgo="${key}"><span class="sx"><b>${esc(translateSubject(l.subject, L))}</b>
+      <small>${esc(l.start)}–${esc(l.end)}${place ? " · " + esc(place) : ""}${l.teacher ? " · " + esc(l.teacher) : ""}</small></span>${icon("arrow")}</button>`;
+  }).join("");
+}
+
 // ------------------------------------------------------------------ напоминания
 
 let syncTimer = null;
@@ -1404,9 +1738,15 @@ function bindEvents() {
     const go = e.target.closest("[data-go]");
     if (go) return goToDate(parseIso(go.dataset.go));
     if (e.target.closest("[data-go-exams]")) { haptic(); setTab("grades"); return; }
-    if (e.target.closest("[data-retry]")) { ensureWeek(mondayOf(S.sel), true); renderPager(false); }
+    if (e.target.closest("[data-retry]")) { ensureWeek(mondayOf(S.sel), true); renderPager(false); return; }
+    const cd = e.target.closest("[data-copy-day]");
+    if (cd) { const t = dayText(cd.dataset.copyDay); if (t) sendText(t); return; }
+    const les = e.target.closest(".lesson");
+    if (les && les.dataset.date) openLesson(les);
   });
   $("#go-today").addEventListener("click", () => goToDate(today()));
+  $("#go-search").addEventListener("click", openSearch);
+  $("#sheet").addEventListener("input", e => { if (e.target.id === "srch-in") renderSearch(); });
 
   $("#tasks-scroll").addEventListener("click", e => {
     const f = e.target.closest("[data-filter]");
@@ -1414,6 +1754,8 @@ function bindEvents() {
     const file = e.target.closest("[data-url]");
     if (file) { try { A ? A.openUrl(file.dataset.url) : window.open(file.dataset.url); } catch (err) { } return; }
     if (e.target.closest("[data-retry]")) { loadTasks(true); return; }
+    const ta = e.target.closest("[data-task-act]");
+    if (ta) { taskAction(ta); return; }
     const card = e.target.closest(".task");
     if (card) {
       const idx = +card.dataset.idx;
