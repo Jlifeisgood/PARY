@@ -102,17 +102,21 @@ const P = {
 const icon = name => `<svg class="i" viewBox="0 0 24 24">${P[name]}</svg>`;
 
 // логотип-календарь (экран входа и настройки)
-const LOGO = `<svg viewBox="0 0 100 100"><defs><linearGradient id="lg-g" x1="0" y1="0" x2="1" y2="1">
-  <stop offset="0" stop-color="#6D6AF6"/><stop offset="1" stop-color="#9B5DE5"/></linearGradient></defs>
-  <rect x="6" y="6" width="88" height="88" rx="24" fill="url(#lg-g)"/>
-  <circle cx="20" cy="20" r="40" fill="#fff" fill-opacity=".1"/>
-  <rect x="22" y="20" width="8" height="16" rx="4" fill="#fff" fill-opacity=".85"/>
-  <rect x="70" y="20" width="8" height="16" rx="4" fill="#fff" fill-opacity=".85"/>
-  <rect x="24" y="30" width="52" height="46" rx="11" fill="#fff"/>
-  <rect x="24" y="30" width="52" height="15" rx="11" fill="#EDE9FE"/>
-  <rect x="24" y="38" width="52" height="7" fill="#EDE9FE"/>
-  <g fill="#C7CBF5"><circle cx="34" cy="54" r="3"/><circle cx="50" cy="54" r="3"/><circle cx="66" cy="54" r="3"/><circle cx="34" cy="66" r="3"/></g>
-  <circle cx="50" cy="66" r="5.5" fill="#22C55E"/><circle cx="66" cy="66" r="3" fill="#C7CBF5"/></svg>`;
+// те же фигуры, что в иконке приложения (android/res/drawable/ic_launcher_*.xml), в системе координат 108×108
+const LOGO_SHEET = "M37,29 H71 A12,12 0 0 1 83,41 V72 L70,85 H37 A12,12 0 0 1 25,73 V41 A12,12 0 0 1 37,29 Z";
+const LOGO = `<svg viewBox="0 0 108 108"><defs>
+  <linearGradient id="lg-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4F46E5"/><stop offset=".55" stop-color="#7C5CF2"/><stop offset="1" stop-color="#B45CF0"/></linearGradient>
+  <linearGradient id="lg-h" gradientUnits="userSpaceOnUse" x1="25" y1="29" x2="83" y2="47"><stop offset="0" stop-color="#3F37C9"/><stop offset="1" stop-color="#6D28D9"/></linearGradient></defs>
+  <rect width="108" height="108" fill="url(#lg-g)"/>
+  <circle cx="26" cy="22" r="46" fill="#fff" fill-opacity=".13"/><circle cx="100" cy="104" r="40" fill="#1E1B4B" fill-opacity=".22"/>
+  <g transform="translate(54 55) scale(1.28) translate(-54 -56)">
+    <path d="${LOGO_SHEET}" fill="#140F46" fill-opacity=".1" transform="translate(0 6)"/><path d="${LOGO_SHEET}" fill="#140F46" fill-opacity=".2" transform="translate(0 3)"/>
+    <path d="${LOGO_SHEET}" fill="#fff"/>
+    <path d="M37,29 H71 A12,12 0 0 1 83,41 V47 H25 V41 A12,12 0 0 1 37,29 Z" fill="url(#lg-h)"/>
+    <rect x="38" y="23" width="6" height="13" rx="3" fill="#fff"/><rect x="64" y="23" width="6" height="13" rx="3" fill="#fff"/>
+    <rect x="33" y="54" width="34" height="5.5" rx="2.75" fill="#D9DCFA"/><rect x="33" y="65" width="34" height="10" rx="5" fill="#D9DCFA"/><rect x="33" y="65" width="23" height="10" rx="5" fill="#22C55E"/>
+    <path d="M83,72 L70,85 V72 Z" fill="#C4BDF4"/>
+  </g></svg>`;
 
 // ------------------------------------------------------------------ API
 
